@@ -1,0 +1,307 @@
+<?xml version="1.0" ?>
+<!--
+  APEX GCS — CVS Pharmacy Drone Delivery World
+  Gazebo Harmonic / SDF 1.9
+
+  Scene: New York urban block with CVS pharmacy, roads, buildings.
+  The drone spawns at street level and can fly up and around the block.
+-->
+<sdf version="1.9">
+  <world name="cvs_delivery">
+
+    <!-- Physics -->
+    <physics name="1ms" type="dart">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <!-- Plugins -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-air-pressure-system" name="gz::sim::systems::AirPressure"/>
+    <plugin filename="gz-sim-magnetometer-system" name="gz::sim::systems::Magnetometer"/>
+    <plugin filename="gz-sim-wind-effects-system" name="gz::sim::systems::WindEffects">
+      <horizontal>
+        <mean>0</mean>
+        <stddev>0.1</stddev>
+        <bias_mean>0.0</bias_mean>
+        <bias_stddev>0.0</bias_stddev>
+      </horizontal>
+      <vertical>
+        <mean>0</mean>
+        <stddev>0.0</stddev>
+        <bias_mean>0.0</bias_mean>
+        <bias_stddev>0.0</bias_stddev>
+      </vertical>
+    </plugin>
+
+    <!-- Sun / Sky -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 500 0.1 0 -0.5</pose>
+      <diffuse>1.0 0.95 0.85 1</diffuse>
+      <specular>0.4 0.4 0.4 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <scene>
+      <sky>
+        <clouds>
+          <speed>12</speed>
+        </clouds>
+      </sky>
+      <ambient>0.6 0.65 0.7 1</ambient>
+      <background>0.53 0.71 0.87 1</background>
+      <shadows>true</shadows>
+      <grid>false</grid>
+    </scene>
+
+    <!-- ── GROUND PLANE (asphalt) ──────────────────────────────── -->
+    <model name="ground">
+      <static>true</static>
+      <link name="link">
+        <collision name="col">
+          <geometry><plane><normal>0 0 1</normal><size>200 200</size></plane></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><plane><normal>0 0 1</normal><size>200 200</size></plane></geometry>
+          <material>
+            <ambient>0.28 0.28 0.28 1</ambient>
+            <diffuse>0.30 0.30 0.30 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── ROAD MARKINGS (white lines) ───────────────────────────── -->
+    <model name="road_h1">
+      <static>true</static>
+      <pose>0 25 0.01 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><box><size>200 0.2 0.01</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="road_h2">
+      <static>true</static>
+      <pose>0 -25 0.01 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><box><size>200 0.2 0.01</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="road_v1">
+      <static>true</static>
+      <pose>25 0 0.01 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><box><size>0.2 200 0.01</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="road_v2">
+      <static>true</static>
+      <pose>-25 0 0.01 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><box><size>0.2 200 0.01</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── CVS PHARMACY (center building, red) ───────────────────── -->
+    <model name="cvs_pharmacy">
+      <static>true</static>
+      <pose>0 0 4 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>18 12 8</size></box></geometry></collision>
+        <visual name="walls">
+          <geometry><box><size>18 12 8</size></box></geometry>
+          <material>
+            <ambient>0.75 0.10 0.10 1</ambient>
+            <diffuse>0.80 0.12 0.12 1</diffuse>
+            <specular>0.1 0.05 0.05 1</specular>
+          </material>
+        </visual>
+        <!-- White CVS sign band -->
+        <visual name="sign_band">
+          <pose>0 6.01 1.5 0 0 0</pose>
+          <geometry><box><size>14 0.05 2</size></box></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+        </visual>
+        <!-- Roof -->
+        <visual name="roof">
+          <pose>0 0 4.1 0 0 0</pose>
+          <geometry><box><size>18.5 12.5 0.2</size></box></geometry>
+          <material><ambient>0.5 0.08 0.08 1</ambient><diffuse>0.5 0.08 0.08 1</diffuse></material>
+        </visual>
+        <!-- Landing pad on roof -->
+        <visual name="landing_pad">
+          <pose>0 0 4.25 0 0 0</pose>
+          <geometry><cylinder><radius>2.5</radius><length>0.05</length></cylinder></geometry>
+          <material><ambient>0.9 0.9 0.1 1</ambient><diffuse>0.9 0.9 0.1 1</diffuse></material>
+        </visual>
+        <!-- H marker on pad -->
+        <visual name="h_marker">
+          <pose>0 0 4.3 0 0 0</pose>
+          <geometry><box><size>2.0 0.3 0.01</size></box></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── OFFICE BUILDING A (north-west) ───────────────────────── -->
+    <model name="building_a">
+      <static>true</static>
+      <pose>-35 30 10 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>14 10 20</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>14 10 20</size></box></geometry>
+          <material><ambient>0.55 0.60 0.65 1</ambient><diffuse>0.55 0.60 0.65 1</diffuse></material>
+        </visual>
+        <visual name="roof">
+          <pose>0 0 10.1 0 0 0</pose>
+          <geometry><box><size>14.2 10.2 0.2</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── OFFICE BUILDING B (north-east) ───────────────────────── -->
+    <model name="building_b">
+      <static>true</static>
+      <pose>38 28 7 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>12 14 14</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>12 14 14</size></box></geometry>
+          <material><ambient>0.65 0.60 0.50 1</ambient><diffuse>0.65 0.60 0.50 1</diffuse></material>
+        </visual>
+        <visual name="roof">
+          <pose>0 0 7.1 0 0 0</pose>
+          <geometry><box><size>12.2 14.2 0.2</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── APARTMENT BUILDING (south-west) ──────────────────────── -->
+    <model name="building_c">
+      <static>true</static>
+      <pose>-38 -30 12 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>10 16 24</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>10 16 24</size></box></geometry>
+          <material><ambient>0.70 0.65 0.55 1</ambient><diffuse>0.70 0.65 0.55 1</diffuse></material>
+        </visual>
+        <visual name="roof">
+          <pose>0 0 12.1 0 0 0</pose>
+          <geometry><box><size>10.2 16.2 0.2</size></box></geometry>
+          <material><ambient>0.25 0.25 0.25 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── WAREHOUSE (south-east) ───────────────────────────────── -->
+    <model name="building_d">
+      <static>true</static>
+      <pose>40 -32 4 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>20 18 8</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>20 18 8</size></box></geometry>
+          <material><ambient>0.50 0.48 0.45 1</ambient><diffuse>0.50 0.48 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── TREES ─────────────────────────────────────────────────── -->
+    <model name="tree1"><static>true</static><pose>10 18 2 0 0 0</pose>
+      <link name="link">
+        <visual name="trunk"><geometry><cylinder><radius>0.3</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.35 0.22 0.10 1</ambient><diffuse>0.35 0.22 0.10 1</diffuse></material></visual>
+        <visual name="top"><pose>0 0 3 0 0 0</pose><geometry><sphere><radius>2.5</radius></sphere></geometry>
+          <material><ambient>0.15 0.45 0.10 1</ambient><diffuse>0.15 0.45 0.10 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tree2"><static>true</static><pose>-12 -15 2 0 0 0</pose>
+      <link name="link">
+        <visual name="trunk"><geometry><cylinder><radius>0.3</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.35 0.22 0.10 1</ambient><diffuse>0.35 0.22 0.10 1</diffuse></material></visual>
+        <visual name="top"><pose>0 0 3 0 0 0</pose><geometry><sphere><radius>2.2</radius></sphere></geometry>
+          <material><ambient>0.12 0.40 0.08 1</ambient><diffuse>0.12 0.40 0.08 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tree3"><static>true</static><pose>15 -18 2 0 0 0</pose>
+      <link name="link">
+        <visual name="trunk"><geometry><cylinder><radius>0.25</radius><length>3.5</length></cylinder></geometry>
+          <material><ambient>0.35 0.22 0.10 1</ambient><diffuse>0.35 0.22 0.10 1</diffuse></material></visual>
+        <visual name="top"><pose>0 0 2.5 0 0 0</pose><geometry><sphere><radius>2.0</radius></sphere></geometry>
+          <material><ambient>0.18 0.50 0.12 1</ambient><diffuse>0.18 0.50 0.12 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="tree4"><static>true</static><pose>-8 20 2 0 0 0</pose>
+      <link name="link">
+        <visual name="trunk"><geometry><cylinder><radius>0.3</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.35 0.22 0.10 1</ambient><diffuse>0.35 0.22 0.10 1</diffuse></material></visual>
+        <visual name="top"><pose>0 0 3 0 0 0</pose><geometry><sphere><radius>2.3</radius></sphere></geometry>
+          <material><ambient>0.14 0.42 0.09 1</ambient><diffuse>0.14 0.42 0.09 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ── STREET LAMP ────────────────────────────────────────────── -->
+    <model name="lamp1"><static>true</static><pose>22 22 3 0 0 0</pose>
+      <link name="link">
+        <visual name="pole"><geometry><cylinder><radius>0.08</radius><length>6</length></cylinder></geometry>
+          <material><ambient>0.4 0.4 0.4 1</ambient><diffuse>0.4 0.4 0.4 1</diffuse></material></visual>
+        <visual name="head"><pose>0 0 3.2 0 0 0</pose><geometry><box><size>0.5 0.5 0.2</size></box></geometry>
+          <material><ambient>0.9 0.8 0.3 1</ambient><diffuse>0.9 0.8 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="lamp2"><static>true</static><pose>-22 -22 3 0 0 0</pose>
+      <link name="link">
+        <visual name="pole"><geometry><cylinder><radius>0.08</radius><length>6</length></cylinder></geometry>
+          <material><ambient>0.4 0.4 0.4 1</ambient><diffuse>0.4 0.4 0.4 1</diffuse></material></visual>
+        <visual name="head"><pose>0 0 3.2 0 0 0</pose><geometry><box><size>0.5 0.5 0.2</size></box></geometry>
+          <material><ambient>0.9 0.8 0.3 1</ambient><diffuse>0.9 0.8 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ── DELIVERY PACKAGE on ground ───────────────────────────── -->
+    <model name="delivery_package">
+      <static>false</static>
+      <pose>0 0 0.15 0 0 0</pose>
+      <link name="link">
+        <inertial><mass>0.5</mass><inertia><ixx>0.001</ixx><iyy>0.001</iyy><izz>0.001</izz></inertia></inertial>
+        <collision name="col"><geometry><box><size>0.3 0.3 0.3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material><ambient>0.8 0.7 0.2 1</ambient><diffuse>0.8 0.7 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── IRIS DRONE (ArduPilot Gazebo plugin) ─────────────────── -->
+    <model name="iris">
+      <pose>0 -5 0.195 0 0 0</pose>
+      <include merge="true">
+        <uri>model://iris_with_ardupilot</uri>
+      </include>
+    </model>
+
+  </world>
+</sdf>

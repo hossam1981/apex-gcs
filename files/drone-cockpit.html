@@ -1,0 +1,2779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>APEX GCS</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css"/>
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<style>
+:root {
+  --bg:      #0a0e14;
+  --sur:     #111827;
+  --sur2:    #1a2233;
+  --brd:     #263047;
+  --blue:    #3b82f6;
+  --green:   #22c55e;
+  --yellow:  #eab308;
+  --red:     #ef4444;
+  --text:    #e2e8f0;
+  --muted:   #64748b;
+  --r:       6px;
+  --topH:    46px;
+  --botH:    34px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;}
+
+/* ── TOPBAR ── */
+#topbar{
+  height:var(--topH);display:flex;align-items:center;gap:8px;padding:0 14px;
+  background:var(--sur);border-bottom:1px solid var(--brd);
+  position:relative;z-index:100;flex-shrink:0;
+}
+.logo{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;
+  color:var(--blue);letter-spacing:2px;margin-right:6px;}
+.logo em{color:var(--green);font-style:normal;}
+.vdiv{width:1px;height:24px;background:var(--brd);margin:0 2px;}
+
+.pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
+  font-size:11px;font-weight:600;letter-spacing:.4px;border:1px solid var(--brd);
+  background:var(--sur2);color:var(--muted);white-space:nowrap;}
+.pill.g{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.08);}
+.pill.b{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.08);}
+.pill.y{border-color:var(--yellow);color:var(--yellow);background:rgba(234,179,8,.08);}
+.pill.r{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.08);}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+#clock{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-left:auto;}
+.tbtn{padding:5px 12px;border-radius:5px;border:1px solid var(--brd);background:transparent;
+  color:var(--muted);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;}
+.tbtn.on,.tbtn:hover{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.08);}
+
+/* ── MAIN ── */
+#main{
+  display:flex;gap:6px;padding:6px;
+  height:calc(100vh - var(--topH) - var(--botH));
+  overflow:hidden;
+}
+
+/* ── PANELS ── */
+.panel{display:flex;flex-direction:column;gap:6px;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:var(--brd) transparent;}
+.panel::-webkit-scrollbar{width:3px;}
+.panel::-webkit-scrollbar-thumb{background:var(--brd);border-radius:2px;}
+#panel-left{width:200px;min-width:200px;flex-shrink:0;}
+#panel-right{width:220px;min-width:0;flex-shrink:0;overflow-x:hidden;}
+
+/* ── CARD ── */
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:var(--r);padding:10px 12px;flex-shrink:0;}
+.ct{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.ct-badge{font-size:10px;color:var(--muted);font-weight:400;letter-spacing:0;}
+
+/* ── TELEMETRY GRID ── */
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.ti{background:var(--sur2);border:1px solid var(--brd);border-radius:5px;padding:7px 9px;}
+.tl{font-size:10px;color:var(--muted);margin-bottom:2px;display:flex;align-items:center;gap:4px;}
+.tv{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;line-height:1;}
+.tu{font-size:10px;color:var(--muted);font-family:'Inter',sans-serif;font-weight:400;}
+
+/* ── BATTERY ── */
+.bat-bar{height:18px;background:var(--sur2);border:1px solid var(--brd);border-radius:5px;overflow:hidden;position:relative;margin:6px 0;}
+.bat-fill{height:100%;transition:width .6s;}
+.bat-lbl{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;}
+.bat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:4px;}
+.bat-cell{background:var(--sur2);border:1px solid var(--brd);border-radius:5px;padding:5px 7px;text-align:center;}
+.bat-cell .tv{font-size:14px;}
+.bat-cell .tl{justify-content:center;font-size:9px;}
+
+/* ── ALERTS ── */
+.al-item{display:flex;align-items:flex-start;gap:7px;padding:6px 8px;
+  background:var(--sur2);border:1px solid var(--brd);border-radius:5px;margin-bottom:4px;}
+.al-icon{font-size:15px;flex-shrink:0;margin-top:1px;}
+.al-body{flex:1;min-width:0;}
+.al-label{font-size:11px;font-weight:600;color:var(--text);}
+.al-coords{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);}
+.al-time{font-size:9px;color:var(--muted);margin-left:auto;white-space:nowrap;}
+.al-conf{font-size:10px;font-weight:600;margin-left:auto;}
+.al-conf.person{color:#a78bfa;} .al-conf.car{color:#fb923c;} .al-conf.truck{color:#22c55e;}
+
+/* ── QUICK ACTIONS ── */
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.qa-btn{padding:8px 4px;border-radius:5px;border:1px solid var(--brd);background:var(--sur2);
+  color:var(--muted);font-size:11px;font-weight:500;cursor:pointer;text-align:center;
+  transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.qa-btn:hover{border-color:var(--blue);color:var(--blue);}
+.qa-btn .qi{font-size:16px;}
+
+/* ── CENTER ── */
+#center{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;}
+
+/* Camera tabs */
+.ctabs{display:flex;gap:2px;flex-shrink:0;}
+.ctab{padding:6px 14px;border-radius:5px 5px 0 0;font-size:11px;font-weight:600;
+  border:1px solid transparent;cursor:pointer;color:var(--muted);transition:all .15s;}
+.ctab.active{background:var(--sur);border-color:var(--brd);border-bottom-color:var(--sur);color:var(--blue);}
+
+/* Video pane */
+#cam-pane{
+  flex:1;position:relative;background:#000;border-radius:0 var(--r) var(--r) var(--r);
+  border:1px solid var(--brd);overflow:hidden;min-height:0;
+}
+#cam-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:10;background:#000;}
+#cam-3d{position:absolute;inset:0;width:100%;height:100%;z-index:1;}
+#cam-3d canvas{outline:none;}
+#cam-status{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  color:rgba(226,232,240,.85);font-size:13px;background:rgba(0,0,0,.72);z-index:9;pointer-events:none;
+  text-align:center;padding:20px;white-space:pre-wrap;}
+#fpv-canvas{z-index:8;}
+#det-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:11;}
+#hud-top,#hud-bot,.xhair,#att-hud{z-index:12;}
+
+/* HUD overlays */
+.hud{position:absolute;font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:rgba(255,255,255,.8);pointer-events:none;}
+/* Camera HUD bar: FPS / res / settings icons */
+#hud-top{top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:10px;
+  padding:0 10px;background:rgba(0,0,0,.55);}
+#hud-bot{bottom:0;left:0;right:0;height:28px;display:flex;align-items:center;
+  padding:0 10px;background:rgba(0,0,0,.55);}
+.hud-seg{display:flex;align-items:center;gap:4px;color:rgba(255,255,255,.7);}
+.hud-sep{width:1px;height:14px;background:rgba(255,255,255,.2);margin:0 4px;}
+
+/* Crosshair */
+.xhair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+.xhair::before{content:'';position:absolute;width:28px;height:1px;background:rgba(255,255,255,.35);top:0;left:-14px;}
+.xhair::after{content:'';position:absolute;width:1px;height:28px;background:rgba(255,255,255,.35);left:0;top:-14px;}
+
+/* Attitude indicator in HUD */
+#att-hud{position:absolute;bottom:36px;left:10px;width:80px;height:52px;
+  border-radius:5px;overflow:hidden;border:1px solid rgba(255,255,255,.2);}
+
+/* Cam toolbar */
+/* Camera tabs + toolbar. These MUST wrap: if the row overflows #center it
+   slides underneath #panel-right, which then swallows clicks on the buttons
+   at the right-hand end (Webcam / FPV / Rec). */
+#cam-row{display:flex;align-items:center;gap:4px;flex-shrink:0;
+  min-width:0;flex-wrap:wrap;row-gap:4px;}
+#cam-bar{display:flex;align-items:center;gap:6px;padding:0 4px;
+  min-width:0;flex-wrap:wrap;row-gap:4px;}
+.cbtn{padding:5px 11px;border-radius:5px;border:1px solid var(--brd);background:var(--sur2);
+  color:var(--text);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.cbtn:hover,.cbtn.on{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.08);}
+.cbtn.rec{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.08);}
+
+/* Map area */
+#map-area{
+  height:240px;flex-shrink:0;
+  background:var(--sur);border:1px solid var(--brd);border-radius:var(--r);
+  display:flex;overflow:hidden;
+}
+#map-container{flex:1;}
+.leaflet-container{background:#0a0e14!important;}
+.leaflet-tile{filter:brightness(.7) saturate(.6);}
+.leaflet-control-zoom a{background:var(--sur)!important;color:var(--blue)!important;border-color:var(--brd)!important;}
+#map-ctrl{width:130px;flex-shrink:0;display:flex;flex-direction:column;gap:5px;padding:8px;background:var(--sur2);border-left:1px solid var(--brd);}
+
+/* ── RIGHT PANEL ── */
+.sec-title{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;}
+
+/* Mode buttons */
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;}
+.mode-btn{padding:6px 4px;border-radius:5px;border:1px solid var(--brd);background:var(--sur2);
+  color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;}
+.mode-btn.active{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.1);}
+.mode-btn.acro.active{border-color:#f97316;color:#f97316;background:rgba(249,115,22,.12);}
+.pad-bar{height:7px;background:var(--sur2);border:1px solid var(--brd);border-radius:3px;position:relative;overflow:hidden;}
+.pad-bar i{position:absolute;top:0;bottom:0;background:var(--blue);}
+
+/* Flight buttons */
+.fbtn{width:100%;padding:7px 4px;border-radius:5px;border:1px solid var(--brd);background:var(--sur2);
+  color:var(--text);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;}
+.fbtn:hover{opacity:.85;}
+.fbtn.armed{background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green);}
+.fbtn.tkoff{background:rgba(59,130,246,.12);border-color:var(--blue);color:var(--blue);}
+.fbtn.rtl-b{background:rgba(234,179,8,.12);border-color:var(--yellow);color:var(--yellow);}
+.fbtn.land-b{background:rgba(239,68,68,.12);border-color:var(--red);color:var(--red);}
+.btn-pair{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;}
+
+/* Mission control */
+.mc-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.mc-btn{padding:7px 4px;border-radius:5px;border:1px solid var(--brd);background:var(--sur2);
+  color:var(--muted);font-size:11px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s;}
+.mc-btn:hover{border-color:var(--blue);color:var(--blue);}
+.mc-btn.active{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.08);}
+
+/* Payload control */
+.pc-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.pc-btn{padding:7px 4px;border-radius:5px;border:1px solid var(--brd);background:var(--sur2);
+  color:var(--muted);font-size:11px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s;
+  display:flex;flex-direction:column;align-items:center;gap:3px;}
+.pc-btn .pi{font-size:16px;}
+.pc-btn:hover,.pc-btn.on{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.08);}
+.pc-btn.rec-on{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.08);}
+
+/* Status rows */
+.st-item{display:flex;align-items:center;justify-content:space-between;padding:6px 0;
+  border-bottom:1px solid var(--brd);font-size:11px;}
+.st-item:last-child{border:none;padding-bottom:0;}
+.st-key{color:var(--muted);}
+.st-val{font-family:'JetBrains Mono',monospace;color:var(--text);font-size:11px;}
+.st-val.ok{color:var(--green);}
+.link-bars{display:flex;gap:2px;align-items:flex-end;}
+.link-bar{width:3px;border-radius:1px;background:var(--green);}
+
+/* Joystick */
+.joy-row{display:flex;justify-content:space-around;padding:4px 0;gap:4px;}
+.joystick{position:relative;width:80px;height:80px;background:var(--sur2);
+  border:1px solid var(--brd);border-radius:50%;cursor:pointer;touch-action:none;flex-shrink:0;}
+.joy-knob{position:absolute;width:26px;height:26px;background:var(--blue);border-radius:50%;
+  top:50%;left:50%;transform:translate(-50%,-50%);box-shadow:0 0 12px rgba(59,130,246,.5);}
+.joy-label{text-align:center;font-size:10px;color:var(--muted);margin-top:4px;}
+
+/* AI chips */
+.chip{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;
+  font-size:11px;border:1px solid var(--brd);cursor:pointer;color:var(--muted);
+  background:var(--sur2);transition:all .15s;}
+.chip.on{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.08);}
+
+/* Inputs */
+.inp{background:var(--sur2);border:1px solid var(--brd);color:var(--text);
+  padding:6px 10px;font-size:12px;border-radius:5px;width:100%;font-family:'Inter',sans-serif;}
+.inp:focus{outline:none;border-color:var(--blue);}
+
+/* Generic btn */
+.btn{padding:6px 12px;border-radius:5px;border:1px solid var(--brd);background:var(--sur2);
+  color:var(--text);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.btn:hover{border-color:var(--blue);color:var(--blue);}
+.btn.g{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.08);}
+.btn.y{border-color:var(--yellow);color:var(--yellow);background:rgba(234,179,8,.08);}
+.btn.r{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.08);}
+
+/* Waypoint list */
+.wp-item{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--sur2);
+  border:1px solid var(--brd);border-radius:5px;margin-bottom:4px;}
+.wp-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--blue);min-width:26px;}
+.wp-txt{flex:1;font-size:11px;color:var(--muted);}
+.wp-del{color:var(--red);cursor:pointer;font-size:14px;padding:0 4px;}
+
+/* Mission log alerts (small) */
+.lg-item{font-family:'JetBrains Mono',monospace;font-size:11px;padding:2px 0;color:var(--muted);}
+.lg-ok{color:var(--green);} .lg-warn{color:var(--yellow);} .lg-danger{color:var(--red);}
+
+/* ── BOTTOM STATUS BAR ── */
+#statusbar{
+  height:var(--botH);display:flex;align-items:center;gap:0;
+  background:var(--sur);border-top:1px solid var(--brd);flex-shrink:0;padding:0 10px;
+  overflow:hidden;
+}
+.sb-item{display:flex;align-items:center;gap:4px;padding:0 10px;border-right:1px solid var(--brd);
+  font-size:11px;color:var(--muted);white-space:nowrap;}
+.sb-item:last-child{border-right:none;}
+.sb-icon{font-size:13px;}
+.sb-val{font-family:'JetBrains Mono',monospace;color:var(--text);}
+.sb-lbl{font-size:10px;}
+.sb-item.ok .sb-val{color:var(--green);}
+.sb-item.warn .sb-val{color:var(--yellow);}
+
+/* Map layer tabs */
+.map-tabs{display:flex;gap:3px;padding:4px;}
+.mtab{padding:4px 8px;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;color:var(--muted);border:1px solid transparent;}
+.mtab.active{border-color:var(--brd);background:var(--sur);color:var(--blue);}
+
+/* Prog */
+.prog{height:4px;background:var(--sur2);border-radius:2px;margin:4px 0;}
+.prog-fill{height:100%;border-radius:2px;transition:width .4s;}
+
+/* Settings icon */
+.settings-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  border-radius:5px;cursor:pointer;color:var(--muted);border:1px solid var(--brd);
+  background:var(--sur2);font-size:14px;transition:all .15s;}
+.settings-icon:hover{color:var(--blue);border-color:var(--blue);}
+
+/* Responsive — tighten on small screens */
+@media(max-width:1380px){
+  #panel-left{width:180px;min-width:180px;}
+  #panel-right{width:230px;min-width:230px;}
+  .tv{font-size:18px;}
+}
+@media(max-width:1150px){
+  #panel-left{width:160px;min-width:160px;}
+  #panel-right{width:200px;min-width:200px;}
+  #map-area{height:200px;}
+  .fbtn{font-size:11px;padding:7px 4px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ TOPBAR ══════════════ -->
+<div id="topbar">
+  <div class="logo">APEX<em>GCS</em></div>
+  <div class="vdiv"></div>
+  <button class="tbtn on" id="btn-left"  onclick="togglePanel('left')">Telemetry</button>
+  <button class="tbtn on" id="btn-right" onclick="togglePanel('right')">Controls</button>
+  <div class="vdiv"></div>
+  <div class="pill" id="conn-pill"><div class="dot" id="ws-dot" style="background:var(--red)"></div><span id="conn-txt">Disconnected</span></div>
+  <div class="pill b"  id="mode-pill">STABILIZE</div>
+  <div class="pill r"  id="arm-pill">DISARMED</div>
+  <div class="vdiv"></div>
+  <div class="pill"   id="gps-pill">GPS 9 sats</div>
+  <div class="pill"   id="ai-pill">AI loading</div>
+  <div class="pill y" id="rec-pill" style="display:none;">● REC</div>
+  <div id="clock">--:--:-- UTC</div>
+  <div class="settings-icon" onclick="switchCenterTab('log')" title="Settings / Log">⚙</div>
+</div>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<div id="main">
+
+  <!-- ── LEFT PANEL ── -->
+  <div class="panel" id="panel-left">
+
+    <!-- Flight Telemetry -->
+    <div class="card">
+      <div class="ct">Flight Telemetry <span class="ct-badge" id="tel-hz">-- Hz</span></div>
+      <div class="tg">
+        <div class="ti"><div class="tl">↕ Altitude</div><div class="tv" id="t-alt">0.0<span class="tu"> m</span></div></div>
+        <div class="ti"><div class="tl">⬆ V.Speed</div><div class="tv" id="t-vspd">0.0<span class="tu"> m/s</span></div></div>
+        <div class="ti"><div class="tl">⬤ Gnd Spd</div><div class="tv" id="t-spd">0.0<span class="tu"> m/s</span></div></div>
+        <div class="ti"><div class="tl">✈ Air Spd</div><div class="tv" id="t-aspd">0.0<span class="tu"> m/s</span></div></div>
+        <div class="ti"><div class="tl">◎ Heading</div><div class="tv" id="t-hdg">000<span class="tu">°</span></div></div>
+        <div class="ti"><div class="tl">📍 Distance</div><div class="tv" id="t-dist">0<span class="tu"> m</span></div></div>
+        <div class="ti"><div class="tl">⊕ HDOP</div><div class="tv" id="t-hdop">1.2</div></div>
+        <div class="ti"><div class="tl">⏱ Flt Time</div><div class="tv" id="t-ftime" style="font-size:16px;">00:00</div></div>
+      </div>
+    </div>
+
+    <!-- Battery -->
+    <div class="card">
+      <div class="ct">Battery <span class="ct-badge" id="bat-est">∞</span></div>
+      <div class="bat-bar">
+        <div class="bat-fill" id="bat-fill" style="width:85%;background:var(--green);"></div>
+        <div class="bat-lbl" id="bat-pct">85%</div>
+      </div>
+      <div class="bat-row">
+        <div class="bat-cell"><div class="tl" style="justify-content:center;">Voltage</div><div class="tv" id="t-volt">15.4<span class="tu">V</span></div></div>
+        <div class="bat-cell"><div class="tl" style="justify-content:center;">Current</div><div class="tv" id="t-curr">0.0<span class="tu">A</span></div></div>
+        <div class="bat-cell"><div class="tl" style="justify-content:center;">Left</div><div class="tv" id="t-left" style="font-size:13px;">--</div></div>
+      </div>
+    </div>
+
+    <!-- Altitude History Graph -->
+    <div class="card">
+      <div class="ct">Altitude History <span class="ct-badge" id="alt-graph-max">0m</span></div>
+      <canvas id="alt-graph" height="55" style="width:100%;display:block;"></canvas>
+    </div>
+
+    <!-- Alerts -->
+    <div class="card" style="flex:1;">
+      <div class="ct">Alerts <span class="ct-badge" id="alert-count">0</span>
+        <span style="margin-left:auto;font-size:9px;cursor:pointer;color:var(--muted);" onclick="document.getElementById('alert-list').innerHTML='';alertCount=0;document.getElementById('alert-count').textContent=0;">Clear</span>
+      </div>
+      <div id="alert-list" style="max-height:200px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- Quick Actions — unique actions not in right panel -->
+    <div class="card">
+      <div class="ct">Quick Actions</div>
+      <div class="qa-grid">
+        <div class="qa-btn" onclick="holdPos()"><span class="qi">⏸</span>Hold Pos</div>
+        <div class="qa-btn" onclick="addScanPattern()"><span class="qi">🔲</span>Scan Grid</div>
+        <div class="qa-btn" onclick="toggleNight()"><span class="qi">🌙</span>Night Mode</div>
+        <div class="qa-btn" onclick="followMe()"><span class="qi">👤</span>Follow Me</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── CENTER ── -->
+  <div id="center">
+
+    <!-- Camera tabs -->
+    <div id="cam-row">
+      <div class="ctabs">
+        <div class="ctab active" onclick="switchCameraTab('video',this)">VIDEO FEED</div>
+        <div class="ctab" onclick="switchCameraTab('payload',this)">PAYLOAD</div>
+        <div class="ctab" onclick="switchCameraTab('tracking',this)">TRACKING</div>
+      </div>
+      <!-- Camera toolbar inline -->
+      <div id="cam-bar" style="margin-left:6px;">
+        <button class="cbtn" id="webcam-btn" onclick="activateWebcam()">📷 Webcam</button>
+        <button class="cbtn" onclick="switchToSim()">🎮 Sim</button>
+        <button class="cbtn on" id="det-btn" onclick="toggleDetection()">🎯 AI Detect</button>
+        <button class="cbtn" onclick="zoomIn()">+</button>
+        <button class="cbtn" onclick="zoomOut()">−</button>
+        <button class="cbtn" onclick="toggleNight()">🌙 Night</button>
+        <button class="cbtn" id="fpv-btn" onclick="toggleFPV()">🥽 FPV</button>
+        <button class="cbtn" id="rec-btn" onclick="toggleRecord()">⏺ Rec</button>
+        <input class="inp" id="drone-cam-url" placeholder="Drone cam URL (MJPEG)" style="width:180px;font-size:10px;padding:4px 8px;display:none;" onchange="setDroneCam(this.value)"/>
+      </div>
+    </div>
+
+    <!-- Video pane -->
+    <div id="cam-pane">
+      <div id="cam-3d"></div>
+      <video id="cam-video" autoplay muted playsinline></video>
+      <div id="cam-status"></div>
+      <canvas id="fpv-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:none;"></canvas>
+      <canvas id="det-canvas"></canvas>
+
+      <!-- HUD top bar -->
+      <div id="hud-top" class="hud">
+        <div class="hud-seg">FPS <span id="cam-fps">--</span></div>
+        <div class="hud-sep"></div>
+        <div class="hud-seg" id="cam-mode">SIM</div>
+        <div class="hud-sep"></div>
+        <div class="hud-seg">2.7x</div>
+        <div class="hud-sep"></div>
+        <div class="hud-seg">1080p</div>
+        <div class="hud-sep"></div>
+        <div class="hud-seg" id="cam-hdg-hud">HDG 000°</div>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <div class="hud-seg">ISO 200</div>
+          <div class="hud-sep"></div>
+          <div class="hud-seg">1/640</div>
+          <div class="hud-seg" id="cam-det-count">Targets: 0</div>
+        </div>
+      </div>
+
+      <!-- Bottom HUD bar -->
+      <div id="hud-bot" class="hud">
+        <div class="hud-seg">ALT <span id="hud-alt">0</span>m</div>
+        <div class="hud-sep"></div>
+        <div class="hud-seg">VS <span id="hud-vs">0.0</span>m/s</div>
+        <div class="hud-sep"></div>
+        <div class="hud-seg">GS <span id="hud-gs">0.0</span>m/s</div>
+        <div class="hud-sep"></div>
+        <div class="hud-seg">DS <span id="hud-ds">0</span>m</div>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+          <div class="hud-seg" id="cam-coords">40.7128, -74.0060</div>
+          <div class="hud-sep"></div>
+          <div class="hud-seg" id="cam-rec" style="color:rgba(239,68,68,.8);">● REC OFF</div>
+        </div>
+      </div>
+
+      <!-- Mini attitude in HUD -->
+      <canvas id="att-hud" width="80" height="52"></canvas>
+      <div class="xhair"></div>
+      <!-- Tracking lock overlay -->
+      <div id="track-lock" style="display:none;position:absolute;top:0;left:0;transform:translate(-50%,-50%);pointer-events:none;">
+        <svg width="60" height="60" viewBox="0 0 60 60">
+          <circle cx="30" cy="30" r="28" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="8 4"/>
+          <line x1="30" y1="2" x2="30" y2="12" stroke="#ef4444" stroke-width="1.5"/>
+          <line x1="30" y1="48" x2="30" y2="58" stroke="#ef4444" stroke-width="1.5"/>
+          <line x1="2" y1="30" x2="12" y2="30" stroke="#ef4444" stroke-width="1.5"/>
+          <line x1="48" y1="30" x2="58" y2="30" stroke="#ef4444" stroke-width="1.5"/>
+        </svg>
+        <div style="text-align:center;font-family:monospace;font-size:10px;color:#ef4444;margin-top:-4px;" id="track-label">LOCKED</div>
+      </div>
+    </div>
+
+    <!-- Map area -->
+    <div id="map-area">
+      <div id="map-container"></div>
+      <div id="map-ctrl">
+        <div class="map-tabs">
+          <div class="mtab active" onclick="switchMapTab(this,'map')">Map</div>
+          <div class="mtab" onclick="switchMapTab(this,'mission')">Mission</div>
+          <div class="mtab" onclick="switchMapTab(this,'scan')">Scan</div>
+          <div class="mtab" onclick="switchMapTab(this,'log')">Log</div>
+        </div>
+
+        <!-- Map tab -->
+        <div id="mc-map" class="map-content" style="display:flex;flex-direction:column;gap:4px;padding:0 4px 4px;">
+          <button class="btn" onclick="toggleMapLayer()" style="font-size:10px;padding:4px 6px;">Toggle Layer</button>
+          <button class="btn g" onclick="addScanPattern()" style="font-size:10px;padding:4px 6px;">+ Scan Grid</button>
+          <button class="btn" onclick="clearWaypoints()" style="font-size:10px;padding:4px 6px;">Clear WPs</button>
+          <p style="font-size:9px;color:var(--muted);">Click map to add waypoints</p>
+          <div id="wp-count" style="font-size:10px;color:var(--muted);">0 waypoints</div>
+          <div style="display:flex;gap:3px;margin-top:4px;">
+            <input class="inp" id="fence-r" placeholder="Fence(m)" style="font-size:10px;padding:4px 6px;" value="500"/>
+            <button class="btn" onclick="setGeofence()" style="font-size:10px;padding:4px 6px;">🔒 Fence</button>
+          </div>
+          <button class="btn r" onclick="clearGeofence()" style="font-size:10px;padding:4px 6px;width:100%;margin-top:3px;">✕ Clear Fence</button>
+        </div>
+
+        <!-- Mission tab -->
+        <div id="mc-mission" class="map-content" style="display:none;flex-direction:column;gap:4px;padding:0 4px 4px;">
+          <div style="display:flex;gap:3px;">
+            <input class="inp" id="wp-lat" placeholder="Lat" style="font-size:10px;padding:4px 6px;"/>
+            <input class="inp" id="wp-lng" placeholder="Lng" style="font-size:10px;padding:4px 6px;"/>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <input class="inp" id="wp-alt" placeholder="Alt(m)" style="font-size:10px;padding:4px 6px;"/>
+            <button class="btn g" onclick="addWaypoint()" style="font-size:10px;padding:4px 8px;white-space:nowrap;">+Add</button>
+          </div>
+          <button class="btn g" onclick="planRoute()" style="font-size:10px;padding:4px 6px;">🧭 Plan Around Buildings</button>
+          <div id="plan-status" style="font-size:9px;color:var(--muted);">not planned</div>
+          <div id="waypoint-list" style="max-height:90px;overflow-y:auto;"></div>
+          <div class="prog"><div class="prog-fill" id="mission-progress" style="width:0%;background:var(--blue);"></div></div>
+          <div style="font-size:10px;color:var(--muted);" id="mission-status">Idle</div>
+        </div>
+
+        <!-- Scan tab -->
+        <div id="mc-scan" class="map-content" style="display:none;flex-direction:column;gap:4px;padding:0 4px 4px;">
+          <div class="st-item"><span class="st-key" style="font-size:10px;">RTL Battery</span><span class="st-val" id="rtl-bat">20%</span></div>
+          <div class="st-item"><span class="st-key" style="font-size:10px;">Scan Alt</span><span class="st-val" id="scan-alt">30m</span></div>
+          <div style="display:flex;gap:3px;flex-wrap:wrap;">
+            <button class="btn" onclick="adjustRTL(-5)" style="font-size:10px;padding:3px 6px;">↓RTL</button>
+            <button class="btn" onclick="adjustRTL(5)"  style="font-size:10px;padding:3px 6px;">↑RTL</button>
+            <button class="btn" onclick="adjustScanAlt(-5)" style="font-size:10px;padding:3px 6px;">↓Alt</button>
+            <button class="btn" onclick="adjustScanAlt(5)"  style="font-size:10px;padding:3px 6px;">↑Alt</button>
+          </div>
+          <div class="prog"><div class="prog-fill" id="scan-progress" style="width:0%;background:var(--yellow);"></div></div>
+          <div style="font-size:10px;color:var(--muted);" id="scan-status">Scan: Idle</div>
+        </div>
+
+        <!-- Log tab -->
+        <div id="mc-log" class="map-content" style="display:none;flex-direction:column;gap:4px;padding:0 4px 4px;">
+          <div style="font-size:10px;color:var(--muted);">Log <span id="log-count">0</span></div>
+          <div id="sys-log" style="max-height:100px;overflow-y:auto;"></div>
+          <div style="display:flex;gap:3px;">
+            <button class="btn g" onclick="connectDrone()" style="font-size:10px;padding:4px 6px;">Connect</button>
+            <button class="btn" onclick="simulateConnect()" style="font-size:10px;padding:4px 6px;">Sim</button>
+          </div>
+          <input class="inp" id="ws-url" value="ws://localhost:5000" style="font-size:10px;padding:4px 6px;"/>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div class="panel" id="panel-right">
+
+    <!-- Manual Control — TOP so joystick is always reachable -->
+    <div class="card">
+      <div class="ct">Manual Control <span class="ct-badge" id="joy-vals">T:0 R:0</span></div>
+      <div class="joy-row">
+        <div>
+          <div class="joystick" id="joy-left" onmousedown="startJoy(event,'left')" ontouchstart="startJoy(event,'left')">
+            <div class="joy-knob" id="knob-left"></div>
+          </div>
+          <div class="joy-label">Throttle / Yaw</div>
+        </div>
+        <div>
+          <div class="joystick" id="joy-right" onmousedown="startJoy(event,'right')" ontouchstart="startJoy(event,'right')">
+            <div class="joy-knob" id="knob-right"></div>
+          </div>
+          <div class="joy-label">Pitch / Roll</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flight Control -->
+    <div class="card">
+      <div class="ct">Flight Control</div>
+      <div class="btn-pair" style="margin-bottom:5px;">
+        <button class="fbtn armed" id="arm-btn" onclick="toggleArm()">⚡ ARM</button>
+        <button class="fbtn tkoff" onclick="takeoff()">🚀 TAKEOFF</button>
+      </div>
+      <div class="btn-pair">
+        <button class="fbtn rtl-b" onclick="rtl()">🏠 RTL</button>
+        <button class="fbtn land-b" onclick="land()">🛬 LAND</button>
+      </div>
+      <!-- E-Stop full width -->
+      <button class="fbtn land-b" style="width:100%;margin-top:5px;font-size:11px;" onclick="emergencyStop()">⛔ EMERGENCY STOP</button>
+    </div>
+
+    <!-- Mode — removed RTL (it's a command, not a mode here); added GUIDED -->
+    <div class="card">
+      <div class="ct">Mode</div>
+      <div class="modes">
+        <div class="mode-btn active" data-mode="STABILIZE" onclick="setMode(this,'STABILIZE')">STAB</div>
+        <div class="mode-btn" data-mode="LOITER" onclick="setMode(this,'LOITER')">LOITER</div>
+        <div class="mode-btn" data-mode="AUTO" onclick="setMode(this,'AUTO')">AUTO</div>
+        <div class="mode-btn" data-mode="GUIDED" onclick="setMode(this,'GUIDED')">GUIDED</div>
+        <div class="mode-btn acro" data-mode="ACRO" onclick="setMode(this,'ACRO')" style="grid-column:1/-1;">🌀 ACRO (rate)</div>
+      </div>
+    </div>
+
+    <!-- Flight Assist -->
+    <div class="card">
+      <div class="ct">Flight Assist <span class="ct-badge" id="assist-acts">—</span></div>
+      <div class="qa-grid" style="margin-bottom:6px;">
+        <div class="qa-btn on" id="as-crash" onclick="toggleAssist('crashOn',this)"><span class="qi">🛡</span>Anti-Crash</div>
+        <div class="qa-btn on" id="as-avoid" onclick="toggleAssist('avoidOn',this)"><span class="qi">🧱</span>Avoid</div>
+        <div class="qa-btn on" id="as-wind"  onclick="toggleAssist('windOn',this)"><span class="qi">🌬</span>Wind Hold</div>
+        <div class="qa-btn" onclick="SAFETY.rescue()" style="color:var(--yellow);border-color:var(--yellow);"><span class="qi">🛟</span>Rescue</div>
+      </div>
+      <div class="st-item"><span class="st-key">Wind est</span><span class="st-val" id="as-wind-val">0.0 m/s</span></div>
+      <div class="st-item"><span class="st-key">Obstacle</span><span class="st-val" id="as-obst">none</span></div>
+      <div class="st-item"><span class="st-key">Drop zone</span><span class="st-val ok" id="as-zone">clear</span></div>
+    </div>
+
+    <!-- FPV / Radio -->
+    <div class="card">
+      <div class="ct">FPV Radio <span class="ct-badge" id="pad-rate">--°/s</span></div>
+      <div id="pad-status" style="font-size:11px;color:var(--muted);margin-bottom:6px;">🎮 No gamepad — using virtual sticks</div>
+      <div style="display:flex;gap:3px;margin-bottom:6px;">
+        <select class="inp" id="pad-mode" onchange="PAD.mapping=this.value" style="font-size:10px;padding:4px 6px;">
+          <option value="mode2" selected>Mode 2</option>
+          <option value="mode1">Mode 1</option>
+          <option value="mode3">Mode 3</option>
+          <option value="mode4">Mode 4</option>
+        </select>
+        <button class="btn" onclick="PAD.invertThr=!PAD.invertThr;addAlert('Throttle axis '+(PAD.invertThr?'inverted':'normal'),'ok');" style="font-size:10px;padding:4px 6px;white-space:nowrap;">⇅ Thr</button>
+      </div>
+      <div id="pad-bars" style="display:grid;grid-template-columns:auto 1fr;gap:3px 6px;font-size:10px;align-items:center;"></div>
+      <div style="display:flex;gap:3px;margin-top:6px;">
+        <input class="inp" id="rate-super" type="number" step="0.05" min="0" max="0.99" value="0.72" onchange="RATES.superRate=Math.min(.99,Math.max(0,+this.value||0));updatePadUI();" title="Super rate" style="font-size:10px;padding:4px 6px;"/>
+        <input class="inp" id="rate-expo" type="number" step="0.05" min="0" max="1" value="0.15" onchange="RATES.expo=Math.min(1,Math.max(0,+this.value||0));updatePadUI();" title="Expo" style="font-size:10px;padding:4px 6px;"/>
+      </div>
+      <div style="font-size:9px;color:var(--muted);margin-top:3px;">super / expo</div>
+    </div>
+
+    <!-- Mission Control -->
+    <div class="card">
+      <div class="ct">Mission Control</div>
+      <div class="mc-grid">
+        <div class="mc-btn active" onclick="startMission()">▶ Start</div>
+        <div class="mc-btn" onclick="pauseMission()">⏸ Pause</div>
+        <div class="mc-btn" onclick="resumeMission()">⏵ Resume</div>
+        <div class="mc-btn" style="color:var(--red);border-color:var(--red);" onclick="abortMission()">✕ Abort</div>
+      </div>
+    </div>
+
+
+    <!-- AI Detections (single place for AI controls) -->
+    <div class="card">
+      <div class="ct">AI Detections <span class="ct-badge" id="det-total">0</span>
+        <button class="cbtn" id="det-btn2" onclick="toggleDetection()" style="margin-left:auto;padding:2px 8px;font-size:10px;">ON</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:7px;" id="model-status">Loading COCO-SSD…</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px;" id="scan-targets">
+        <div class="chip on" data-target="person" onclick="toggleTarget(this)">👤 Person</div>
+        <div class="chip on" data-target="car"    onclick="toggleTarget(this)">🚗 Car</div>
+        <div class="chip on" data-target="truck"  onclick="toggleTarget(this)">🚛 Truck</div>
+        <div class="chip"    data-target="dog"    onclick="toggleTarget(this)">🐕 Dog</div>
+        <div class="chip"    data-target="bird"   onclick="toggleTarget(this)">🐦 Bird</div>
+        <div class="chip"    data-target="bicycle" onclick="toggleTarget(this)">🚲 Bike</div>
+      </div>
+      <div style="max-height:80px;overflow-y:auto;" id="target-list"></div>
+    </div>
+
+    <!-- Status -->
+    <div class="card">
+      <div class="ct">Status</div>
+      <div class="st-item">
+        <span class="st-key">Payload</span>
+        <span class="st-val ok" id="st-payload">Ready</span>
+      </div>
+      <div class="st-item">
+        <span class="st-key">Link Quality</span>
+        <span class="st-val ok">
+          <span id="st-link">98%</span>
+          <span class="link-bars" style="margin-left:4px;">
+            <div class="link-bar" style="height:4px;"></div>
+            <div class="link-bar" style="height:6px;"></div>
+            <div class="link-bar" style="height:9px;"></div>
+            <div class="link-bar" style="height:12px;"></div>
+          </span>
+        </span>
+      </div>
+      <div class="st-item">
+        <span class="st-key">Storage</span>
+        <span class="st-val" id="st-storage">42.6 / 128 GB</span>
+      </div>
+      <div class="st-item">
+        <span class="st-key">Temperature</span>
+        <span class="st-val" id="st-temp">28 °C</span>
+      </div>
+      <div class="st-item">
+        <span class="st-key">Wind</span>
+        <span class="st-val" id="st-wind">0.0 m/s N</span>
+      </div>
+      <div class="st-item">
+        <span class="st-key">E-Stop</span>
+        <span class="st-val r" style="cursor:pointer;" onclick="emergencyStop()">⛔ EMERGENCY</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════ STATUS BAR ══════════════ -->
+<div id="statusbar">
+  <div class="sb-item ok"><span class="sb-icon">📡</span><span class="sb-lbl">GPS</span><span class="sb-val" id="sb-gps">12</span></div>
+  <div class="sb-item ok"><span class="sb-icon">🛰</span><span class="sb-lbl">Sats</span><span class="sb-val" id="sb-sats">18</span></div>
+  <div class="sb-item"><span class="sb-icon">⊕</span><span class="sb-lbl">HDOP</span><span class="sb-val" id="sb-hdop">0.8</span></div>
+  <div class="sb-item"><span class="sb-icon">🔋</span><span class="sb-lbl">Battery</span><span class="sb-val" id="sb-bat">85%</span></div>
+  <div class="sb-item"><span class="sb-icon">💻</span><span class="sb-lbl">CPU</span><span class="sb-val" id="sb-cpu">32%</span></div>
+  <div class="sb-item"><span class="sb-icon">💨</span><span class="sb-lbl">Wind</span><span class="sb-val" id="sb-wind">0.4 m/s</span></div>
+  <div class="sb-item"><span class="sb-icon">🌡</span><span class="sb-lbl">Temp</span><span class="sb-val" id="sb-temp">28°C</span></div>
+  <div class="sb-item ok"><span class="sb-icon">📶</span><span class="sb-lbl">Link</span><span class="sb-val" id="sb-link">98%</span></div>
+  <div class="sb-item ok"><span class="sb-icon">🎮</span><span class="sb-lbl">RC</span><span class="sb-val" id="sb-rc">40 98%</span></div>
+  <div class="sb-item"><span class="sb-icon">📊</span><span class="sb-lbl">Data</span><span class="sb-val" id="sb-data">40</span></div>
+  <div class="sb-item" style="margin-left:auto;border-right:none;">
+    <span class="sb-icon">💬</span><span class="sb-lbl">Messages</span>
+    <span class="sb-val" id="sb-msgs">0</span>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+// Sim spawn: Liberty State Park great lawn — open grass, clear view all around
+const SPAWN={lat:40.70300,lng:-74.04480};
+const state={
+  connected:false,simMode:true,armed:false,mode:'STABILIZE',
+  lat:SPAWN.lat,lng:SPAWN.lng,alt:0,homeLat:SPAWN.lat,homeLng:SPAWN.lng,
+  vx:0,vy:0,vz:0,pitch:0,roll:0,hdg:0,groundspeed:0,airspeed:0,
+  battery:85,voltage:15.4,current:0,mah_used:0,
+  satellites:9,hdop:1.2,flightTicks:0,
+  waypoints:[],missionActive:false,missionWpIdx:0,
+  scanActive:false,rtlBat:20,scanAlt:30,_rtlTriggered:false,
+  targets:new Set(['person','car','truck']),
+  windSpeed:0,windDir:0,
+  joy:{throttle:0,yaw:0,pitch:0,roll:0},
+  thrust:0,recording:false,night:false,zoom:1,dist:0,
+};
+
+// ══════════════════════════════════════════════════════
+//  PHYSICS
+// ══════════════════════════════════════════════════════
+// ── Quaternion helpers ────────────────────────────────────────────────────────
+// q = [w,x,y,z] rotates BODY → WORLD.
+// World axes: x=North, y=East, z=Up.   Body axes: x=forward, y=right, z=up.
+const QT={
+  norm(q){const m=Math.hypot(q[0],q[1],q[2],q[3])||1;return[q[0]/m,q[1]/m,q[2]/m,q[3]/m];},
+  mul(a,b){return[
+    a[0]*b[0]-a[1]*b[1]-a[2]*b[2]-a[3]*b[3],
+    a[0]*b[1]+a[1]*b[0]+a[2]*b[3]-a[3]*b[2],
+    a[0]*b[2]-a[1]*b[3]+a[2]*b[0]+a[3]*b[1],
+    a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0]];},
+  rot(q,v){                                    // rotate vector v by q
+    const[w,x,y,z]=q,[a,b,c]=v;
+    const tx=2*(y*c-z*b),ty=2*(z*a-x*c),tz=2*(x*b-y*a);
+    return[a+w*tx+(y*tz-z*ty), b+w*ty+(z*tx-x*tz), c+w*tz+(x*ty-y*tx)];},
+  fromYaw(deg){const h=deg*Math.PI/360;return[Math.cos(h),0,0,Math.sin(h)];},
+  // Integrate body angular rates (rad/s) for dt seconds
+  spin(q,p,r,y,dt){
+    const d=QT.mul(q,[0,p,r,y]);
+    return QT.norm([q[0]+.5*d[0]*dt,q[1]+.5*d[1]*dt,q[2]+.5*d[2]*dt,q[3]+.5*d[3]*dt]);}
+};
+
+// ── Betaflight-style rate curve (the same RC/super/expo numbers real FPV
+//    pilots tune in their radios). Returns commanded angular rate in deg/s.
+const RATES={
+  rcRate:1.0, superRate:0.72, expo:0.15,
+  calc(rc){
+    rc=Math.max(-1,Math.min(1,rc));
+    const a=Math.abs(rc);
+    const shaped=rc*Math.pow(a,3)*this.expo+rc*(1-this.expo);
+    let deg=200*this.rcRate*shaped;
+    if(this.superRate>0)deg/=Math.max(.01,1-a*this.superRate);
+    return deg;
+  },
+  max(){return Math.round(Math.abs(this.calc(1)));}
+};
+
+const ANGLE_MODES=['STABILIZE','ALT_HOLD','LOITER','POSHOLD','AUTO','GUIDED','RTL','LAND'];
+
+const PHYSICS={
+  DT:.1,MASS:1.5,MAX_THRUST:25,GRAVITY:9.81,
+  DRAG_H:.3,DRAG_V:.5,MAX_TILT:25,MAX_CLIMB:5,MAX_SPEED:12,
+  // Acro: FPV quads run 4:1 thrust-to-weight and are drag-limited, not clamped
+  ACRO_TWR:4.0, ACRO_DRAG:.018, ACRO_MAX_SPEED:40,
+  q:[1,0,0,0],                                  // attitude quaternion
+  pid:{ix:0,iz:0},gustTimer:0,gustX:0,gustY:0,
+  // Rebuild the quaternion from heading when sitting disarmed / on reset
+  level(){this.q=QT.fromYaw(state.hdg);},
+  tick(dt){
+    if(!state.armed){
+      state.vx=0;state.vy=0;state.vz=0;state.thrust=0;state.pitch=0;state.roll=0;
+      this.level();return;
+    }
+    dt=dt||this.DT;
+    const acro=state.mode==='ACRO';
+    this.gustTimer-=dt;
+    if(this.gustTimer<=0){this.gustTimer=3+Math.random()*8;const gm=state.windSpeed*(.5+Math.random()),gd=(state.windDir+(Math.random()-.5)*60)*Math.PI/180;this.gustX=Math.cos(gd)*gm;this.gustY=Math.sin(gd)*gm;}
+    const wx=this.gustX*.3+Math.cos(state.windDir*Math.PI/180)*state.windSpeed*.7;
+    const wy=this.gustY*.3+Math.sin(state.windDir*Math.PI/180)*state.windSpeed*.7;
+
+    // ── Attitude ─────────────────────────────────────────────────────────────
+    const D=Math.PI/180;
+    let p,r,y;                                   // body rates, rad/s
+    if(acro){
+      // Rate (acro) mode: sticks command angular VELOCITY — full 360° authority,
+      // so flips, rolls and inverted flight all work.
+      p=-RATES.calc(state.joy.roll)*D;           // +x is forward: right roll is −x
+      r= RATES.calc(state.joy.pitch)*D;          // +y is right: stick fwd = nose down
+      y= RATES.calc(state.joy.yaw)*D;
+    }else{
+      // Angle (self-levelling) mode: sticks command TILT, a P loop drives the rates
+      const up=QT.rot(this.q,[0,0,1]);
+      const fwd=QT.rot(this.q,[1,0,0]);
+      const rgt=QT.rot(this.q,[0,1,0]);
+      const curPitch=Math.asin(Math.max(-1,Math.min(1,fwd[2])))/D;   // nose-up +
+      const curRoll=Math.atan2(-rgt[2],up[2])/D;                     // right-down +, full ±180
+      let tgtPitch=-state.joy.pitch*this.MAX_TILT;
+      let tgtRoll=state.joy.roll*this.MAX_TILT;
+      // Wind auto-balance: position hold asks for a world-frame acceleration;
+      // convert it into the tilt that produces it (tan θ = a / g), the same way
+      // a real position controller leans the aircraft into the wind.
+      const gd=SAFETY.guidance(dt);
+      if(gd){
+        const hR=state.hdg*D;
+        const aF= gd.aN*Math.cos(hR)+gd.aE*Math.sin(hR);
+        const aR=-gd.aN*Math.sin(hR)+gd.aE*Math.cos(hR);
+        const cl=v=>Math.max(-this.MAX_TILT,Math.min(this.MAX_TILT,v));
+        tgtPitch=cl(tgtPitch-Math.atan2(aF,this.GRAVITY)/D);
+        tgtRoll =cl(tgtRoll +Math.atan2(aR,this.GRAVITY)/D);
+      }
+      const K=6,LIM=300;
+      const clamp=v=>Math.max(-LIM,Math.min(LIM,v));
+      p=-clamp((tgtRoll-curRoll)*K)*D;
+      r=-clamp((tgtPitch-curPitch)*K)*D;
+      y=state.joy.yaw*90*D;
+      if(up[2]<0)this.level();                   // never end up inverted in angle mode
+    }
+    this.q=QT.spin(this.q,p,r,y,dt);
+
+    // ── Throttle ─────────────────────────────────────────────────────────────
+    let thr;
+    if(acro){
+      thr=(state.joy.throttle+1)/2;              // FPV throttle: bottom = 0, top = 100%
+    }else{
+      thr=.5+state.joy.throttle*.5;
+      if(state.mode==='LOITER'||state.mode==='AUTO')thr=this._loiterThr(dt);
+    }
+    state.thrust=Math.max(0,Math.min(1,thr));
+    const maxN=acro?this.ACRO_TWR*this.MASS*this.GRAVITY:this.MAX_THRUST;
+    const thrN=state.thrust*maxN;
+
+    // ── Forces: thrust along the body "up" axis, plus gravity and drag ───────
+    const up=QT.rot(this.q,[0,0,1]);
+    const fwd=QT.rot(this.q,[1,0,0]);
+    const rgt=QT.rot(this.q,[0,1,0]);
+    const acc=thrN/this.MASS;
+    let ax=up[0]*acc, ay=up[1]*acc, az=up[2]*acc-this.GRAVITY;
+    SAFETY.acts=[];
+    // NB: obstacle scanning runs on its own timer, never here — querying the
+    // vector tiles costs ~35ms and this tick runs up to 80x/second.
+    [ax,ay]=SAFETY.avoid(ax,ay);      // obstacle braking overrides pilot input
+
+    if(acro){
+      // Quadratic aerodynamic drag — speed builds until drag balances thrust
+      const rx=state.vx-wx, ry=state.vy-wy, rz=state.vz;
+      const sp=Math.hypot(rx,ry,rz);
+      const k=this.ACRO_DRAG*sp;
+      ax-=k*rx; ay-=k*ry; az-=k*rz;
+      const M=this.ACRO_MAX_SPEED;
+      state.vx=Math.max(-M,Math.min(M,state.vx+ax*dt));
+      state.vy=Math.max(-M,Math.min(M,state.vy+ay*dt));
+      state.vz=Math.max(-M,Math.min(M,state.vz+az*dt));
+    }else{
+      state.vx=Math.max(-this.MAX_SPEED,Math.min(this.MAX_SPEED,state.vx+(ax-this.DRAG_H*(state.vx-wx))*dt));
+      state.vy=Math.max(-this.MAX_SPEED,Math.min(this.MAX_SPEED,state.vy+(ay-this.DRAG_H*(state.vy-wy))*dt));
+      // LOITER position hold: sticks released → actively brake to a stop
+      // (real ArduPilot loiter brakes instead of coasting on momentum)
+      if((state.mode==='LOITER'||state.mode==='POSHOLD')&&Math.abs(state.joy.pitch)<.02&&Math.abs(state.joy.roll)<.02){
+        const brake=Math.min(1,2.2*dt);
+        state.vx*=(1-brake);state.vy*=(1-brake);
+      }
+      state.vz=Math.max(-this.MAX_CLIMB,Math.min(this.MAX_CLIMB,state.vz+(az-this.DRAG_V*state.vz*Math.abs(state.vz))*dt));
+    }
+
+    // ── Vertical protections (ground proximity, ceiling, impact save) ───────
+    state.vz=SAFETY.limitVz(state.vz);
+
+    // ── Ground contact ───────────────────────────────────────────────────────
+    if(state.alt<=0&&state.vz<0){
+      if(acro&&state.vz<-4){this._crash(-state.vz);return;}
+      state.vz=0;state.alt=0;
+    }
+    const mpl=111320,mplg=111320*Math.cos(state.lat*Math.PI/180);
+    state.lat+=state.vx*dt/mpl;state.lng+=state.vy*dt/mplg;state.alt=Math.max(0,state.alt+state.vz*dt);
+
+    // ── Derive display attitude from the quaternion ──────────────────────────
+    state.hdg=(Math.atan2(fwd[1],fwd[0])/D+360)%360;
+    state.pitch=+(Math.asin(Math.max(-1,Math.min(1,fwd[2])))/D).toFixed(1);
+    state.roll=+(Math.atan2(-rgt[2],up[2])/D).toFixed(1);   // full ±180 so flips read correctly
+    state.inverted=up[2]<0;
+
+    state.groundspeed=Math.sqrt(state.vx**2+state.vy**2);
+    state.airspeed=state.groundspeed+(state.windSpeed*.3);
+    state.current=8+14*state.thrust+state.windSpeed*.4;
+    state.mah_used+=state.current*dt/3600*1000;
+    state.battery=Math.max(0,100-(state.mah_used/4000)*100);
+    state.voltage=12.5+(state.battery/100)*3.7-state.current*.02;
+    state.hdop=.8+(Math.random()-.5)*.1+(12-state.satellites)*.15;
+    const dl=(state.lat-state.homeLat)*mpl,dg=(state.lng-state.homeLng)*mplg;
+    state.dist=Math.round(Math.sqrt(dl**2+dg**2));
+    if(state.battery<=state.rtlBat+1&&state.battery>state.rtlBat)addAlert('Battery low — RTL soon','warn');
+    if(state.battery<=state.rtlBat&&!state._rtlTriggered){state._rtlTriggered=true;addAlert('Auto RTL triggered','danger');document.getElementById('mode-pill').textContent='RTL';}
+  },
+  _crash(impact){
+    state.vx=0;state.vy=0;state.vz=0;state.alt=0;state.thrust=0;
+    this.level();
+    addAlert('💥 CRASH — impact '+impact.toFixed(1)+' m/s','danger');
+    sysLog('Crashed at '+impact.toFixed(1)+' m/s — disarmed','danger');
+    syncArm(false);
+  },
+  _loiterThr(dt){
+    const deadband=0.08;
+    if(Math.abs(state.joy.throttle)>deadband){
+      this._loiterAlt=state.alt;this.pid.iz=0;
+      return Math.max(.15,Math.min(.95,0.59+state.joy.throttle*0.36));
+    }
+    if(this._loiterAlt===undefined)this._loiterAlt=state.alt;
+    const e=this._loiterAlt-state.alt;
+    this.pid.iz=Math.max(-5,Math.min(5,this.pid.iz+e*dt));
+    return Math.max(.2,Math.min(.9,.59+e*.12+this.pid.iz*.03+(-state.vz)*.18));
+  }
+};
+
+setInterval(()=>{if(!state.simMode)return;state.windSpeed=Math.min(8,Math.max(0,state.windSpeed+(Math.random()-.5)*.5));state.windDir=(state.windDir+(Math.random()-.5)*10+360)%360;},5000);
+
+// Obstacle sensing runs here, off the physics/render hot paths.
+// Cache rebuild is the expensive half, so it gets the slower timer.
+setInterval(()=>{try{SAFETY.refresh();}catch(e){}},1000);
+setInterval(()=>{try{SAFETY.scan();}catch(e){}},250);
+
+// ══════════════════════════════════════════════════════
+//  FLIGHT ASSIST — wind hold, obstacle avoidance, anti-crash
+//  Position hold learns the wind from the force needed to stay put, exactly
+//  like a real position controller's I-term. Obstacles come from OSM building
+//  footprints + heights already loaded by the 3D camera's vector tiles.
+// ══════════════════════════════════════════════════════
+const SAFETY={
+  windOn:true, avoidOn:true, crashOn:true,
+  GROUND_SLOW_ALT:8,   // start easing off descent below this altitude (m)
+  MIN_DESC:0.6, MAX_DESC:5,
+  ALT_CEIL:120,        // 400 ft — the FAA Part 107 ceiling
+  CLEAR_H:18,          // horizontal clearance to hold from a building (m)
+  CLEAR_V:6,           // vertical clearance to clear its roof by (m)
+  SCAN_R:150,
+  hold:null,           // position-hold anchor
+  wind:{n:0,e:0},      // learned wind force (m/s² of thrust needed to resist it)
+  nearest:null,        // {dist, bearing, height}
+  acts:[],             // protections active this tick
+  _lastScan:0,
+  reset(){this.hold=null;this.wind={n:0,e:0};this.nearest=null;this.acts=[];},
+
+  // Estimated wind in m/s, recovered from the hold force via the drag model
+  windEst(){
+    const m=Math.hypot(this.wind.n,this.wind.e)/PHYSICS.DRAG_H;
+    return {speed:m, dir:(Math.atan2(this.wind.e,this.wind.n)*180/Math.PI+360)%360};
+  },
+
+  // Desired world-frame acceleration (North, East) — position hold only.
+  guidance(dt){
+    if(!this.windOn)return null;
+    const holdMode=state.mode==='LOITER'||state.mode==='POSHOLD';
+    const centered=Math.abs(state.joy.pitch)<.05&&Math.abs(state.joy.roll)<.05;
+    if(!holdMode||!centered||state.alt<0.5){if(!centered)this.hold=null;return null;}
+    const mpl=111320,mplg=111320*Math.cos(state.lat*Math.PI/180);
+    if(!this.hold)this.hold={lat:state.lat,lng:state.lng};
+    const eN=(this.hold.lat-state.lat)*mpl, eE=(this.hold.lng-state.lng)*mplg;
+    const cl=(v,l)=>Math.max(-l,Math.min(l,v));
+    const vTn=cl(eN*.6,4), vTe=cl(eE*.6,4);              // position → velocity target
+    const cN=cl((vTn-state.vx)*1.6,6), cE=cl((vTe-state.vy)*1.6,6);  // velocity → accel
+    // I-term converges on the steady force the wind demands = a wind estimate
+    this.wind.n=cl(this.wind.n+cN*dt*.7,8);
+    this.wind.e=cl(this.wind.e+cE*dt*.7,8);
+    this.acts.push('HOLD');
+    return {aN:cN+this.wind.n, aE:cE+this.wind.e};
+  },
+
+  // Last-resort obstacle braking, applied directly to acceleration in every
+  // mode (this is an override, the way DJI's sensors brake the aircraft).
+  avoid(ax,ay){
+    if(!this.avoidOn||!this.nearest)return[ax,ay];
+    const o=this.nearest;
+    if(state.alt>o.height+this.CLEAR_V)return[ax,ay];      // safely above its roof
+    const br=o.bearing*Math.PI/180;
+    const dirN=Math.cos(br), dirE=Math.sin(br);
+    const closing=state.vx*dirN+state.vy*dirE;             // speed toward obstacle
+    // Start reacting earlier the faster we close — the buffer has to cover the
+    // stopping distance, not just a fixed radius
+    const clear=this.CLEAR_H+Math.max(0,closing)*1.6;
+    if(o.dist>clear)return[ax,ay];
+    const urgency=1-o.dist/clear;
+    let push=urgency*14;
+    if(closing>0)push+=closing*3;                          // brake harder if closing
+    this.acts.push('AVOID');
+    return[ax-dirN*push, ay-dirE*push];
+  },
+
+  // Vertical protections: ground-proximity descent limiting, ceiling, impact save
+  limitVz(vz){
+    if(!this.crashOn)return vz;
+    const landing=(typeof _landWatcher!=='undefined'&&_landWatcher!==null)||state.mode==='LAND';
+    const lim=Math.max(this.MIN_DESC,Math.min(this.MAX_DESC,state.alt/this.GROUND_SLOW_ALT*this.MAX_DESC));
+    if(vz<-lim){vz=-lim;if(state.alt<this.GROUND_SLOW_ALT)this.acts.push('GND');}
+    if(state.alt>=this.ALT_CEIL&&vz>0){vz=0;this.acts.push('CEIL');}
+    // Impact imminent and nobody asked to land → arrest the descent
+    if(!landing&&vz<-0.2){
+      const tti=state.alt/-vz;
+      if(tti<1.2&&state.alt>0.3){vz=Math.max(vz,-state.alt*.5);this.acts.push('SAVE');}
+    }
+    return vz;
+  },
+
+  // ── Obstacle scanning ─────────────────────────────────────────────────────
+  // Two tiers, because querying the vector tiles is expensive (~35 ms):
+  //   refresh() — rebuilds the local footprint cache, only when we've moved
+  //   scan()    — recomputes the nearest wall from that cache, cheaply
+  // Both run on a timer; neither is ever called from the physics loop.
+  _cache:{polys:null,t:0,lat:0,lng:0},
+  refresh(){
+    if(!this.avoidOn||typeof cam3dReady==='undefined'||!cam3dReady||!cam3d)return;
+    const now=Date.now();
+    const mpl=111320,mplg=111320*Math.cos(state.lat*Math.PI/180);
+    const moved=Math.hypot((state.lat-this._cache.lat)*mpl,(state.lng-this._cache.lng)*mplg);
+    if(this._cache.polys&&now-this._cache.t<3000&&moved<50)return;   // cache still good
+    let feats;
+    try{feats=cam3d.querySourceFeatures('omt',{sourceLayer:'building'});}catch(e){return;}
+    const R=this.SCAN_R*2, keep=[];
+    for(const f of feats){
+      const g=f.geometry;if(!g)continue;
+      const h=(f.properties&&(f.properties.render_height||f.properties.height))||12;
+      const rings=g.type==='Polygon'?g.coordinates
+                 :g.type==='MultiPolygon'?[].concat(...g.coordinates):null;
+      if(!rings)continue;
+      for(const ring of rings){
+        if(!ring||ring.length<3)continue;
+        let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+        for(const p of ring){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);}
+        if((x0-state.lng)*mplg>R||(state.lng-x1)*mplg>R||(y0-state.lat)*mpl>R||(state.lat-y1)*mpl>R)continue;
+        keep.push({ring,h});
+        if(keep.length>=150)break;                         // plenty for proximity work
+      }
+      if(keep.length>=150)break;
+    }
+    this._cache={polys:keep,t:now,lat:state.lat,lng:state.lng};
+  },
+  scan(){
+    if(!this.avoidOn){this.nearest=null;return;}
+    const polys=this._cache.polys;
+    if(!polys||!polys.length){this.nearest=null;return;}
+    const mpl=111320,mplg=111320*Math.cos(state.lat*Math.PI/180);
+    const R=this.SCAN_R;
+    let best=null;
+    for(const bl of polys){
+      const ring=bl.ring;
+      let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+      for(const p of ring){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);}
+      if((x0-state.lng)*mplg>R||(state.lng-x1)*mplg>R||(y0-state.lat)*mpl>R||(state.lat-y1)*mpl>R)continue;
+      // Measure to the nearest point on the wall, not the nearest corner
+      const pts=PLANNER._toLocal(ring,state.lat,state.lng);
+      const inside=PLANNER._inside(0,0,pts);
+      const n=inside?{d:0,x:0,y:0}:PLANNER._nearestOnPoly(pts);
+      if(n.d<R&&(!best||n.d<best.dist))
+        best={dist:n.d,height:bl.h,
+              bearing:inside?state.hdg:(Math.atan2(n.x,n.y)*180/Math.PI+360)%360};
+    }
+    this.nearest=best;
+  },
+
+  // Level out, stop, hold altitude — recovers a tumbling or runaway aircraft
+  rescue(){
+    PHYSICS.level();
+    state.joy={throttle:0,yaw:0,pitch:0,roll:0};
+    state.vx*=.2;state.vy*=.2;
+    state.mode='LOITER';syncModeButtons('LOITER');
+    PHYSICS._loiterAlt=Math.max(state.alt,3);PHYSICS.pid.iz=0;
+    this.hold=null;
+    document.getElementById('mode-pill').textContent='LOITER';
+    if(!state.simMode)sendCmd({cmd:'SET_MODE',mode:'LOITER'});
+    addAlert('🛟 RESCUE — levelled and holding','warn');
+    sysLog('Rescue engaged','warn');
+  }
+};
+
+// ══════════════════════════════════════════════════════
+//  PATH PLANNER — routes a mission around real buildings
+//  Two passes, in the order a real delivery planner uses them:
+//    1. Vertical  — climb the leg above anything in its corridor (cheap, preferred)
+//    2. Lateral   — A* around footprints too tall to overfly under the ceiling
+//  Obstacles come from OSM building polygons + heights in the loaded vector tiles.
+// ══════════════════════════════════════════════════════
+const PLANNER={
+  CELL:6,        // A* grid resolution (m)
+  MARGIN:14,     // inflate footprints by this (airframe + clearance)
+  VCLEAR:8,      // vertical clearance over a rooftop (m)
+  CORRIDOR:20,   // half-width of the corridor scanned along a leg (m)
+  MAX_ALT:120,   // Part 107 ceiling
+  extra:[],      // manual no-fly polygons {ring:[[lng,lat],..], h:Infinity}
+  last:null,
+
+  // ── Building footprints from the loaded tiles, de-duplicated across tiles ──
+  buildings(){
+    const out=[...this.extra];
+    if(typeof cam3dReady==='undefined'||!cam3dReady||!cam3d)return out;
+    let feats;
+    try{feats=cam3d.querySourceFeatures('omt',{sourceLayer:'building'});}catch(e){return out;}
+    const seen=new Set();
+    for(const f of feats){
+      const g=f.geometry;if(!g)continue;
+      const key=f.id!==undefined?f.id:null;
+      if(key!==null){if(seen.has(key))continue;seen.add(key);}
+      const h=(f.properties&&(f.properties.render_height||f.properties.height))||12;
+      const rings=g.type==='Polygon'?g.coordinates
+                 :g.type==='MultiPolygon'?[].concat(...g.coordinates):null;
+      if(!rings)continue;
+      for(const ring of rings)if(ring&&ring.length>2)out.push({ring,h});
+    }
+    return out;
+  },
+
+  // ── geometry helpers (all in local metres) ──
+  _seg(px,py,ax,ay,bx,by){                 // point → segment distance
+    const dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy;
+    let t=L?((px-ax)*dx+(py-ay)*dy)/L:0;
+    t=Math.max(0,Math.min(1,t));
+    return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
+  },
+  _inside(px,py,pts){                      // even-odd point-in-polygon
+    let hit=false;
+    for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+      const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+      if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/((yj-yi)||1e-9)+xi))hit=!hit;
+    }
+    return hit;
+  },
+  _toLocal(ring,olat,olng){
+    const mpl=111320,mplg=111320*Math.cos(olat*Math.PI/180);
+    return ring.map(p=>[(p[0]-olng)*mplg,(p[1]-olat)*mpl]);   // [x=East, y=North]
+  },
+  _distToPoly(px,py,pts){
+    if(this._inside(px,py,pts))return 0;
+    let d=Infinity;
+    for(let i=0,j=pts.length-1;i<pts.length;j=i++)
+      d=Math.min(d,this._seg(px,py,pts[j][0],pts[j][1],pts[i][0],pts[i][1]));
+    return d;
+  },
+  // Distance between two segments — 0 when they cross. Needed because a leg can
+  // slice straight through a building whose corners are all far from the line.
+  _segSeg(p1,p2,p3,p4){
+    const o=(a,b,c)=>Math.sign((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]));
+    if(o(p1,p2,p3)!==o(p1,p2,p4)&&o(p3,p4,p1)!==o(p3,p4,p2))return 0;
+    return Math.min(
+      this._seg(p3[0],p3[1],p1[0],p1[1],p2[0],p2[1]),
+      this._seg(p4[0],p4[1],p1[0],p1[1],p2[0],p2[1]),
+      this._seg(p1[0],p1[1],p3[0],p3[1],p4[0],p4[1]),
+      this._seg(p2[0],p2[1],p3[0],p3[1],p4[0],p4[1]));
+  },
+  // Nearest point on a polygon's boundary to the local origin
+  _nearestOnPoly(pts){
+    let bd=Infinity,bx=0,by=0;
+    for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+      const ax=pts[j][0],ay=pts[j][1];
+      const dx=pts[i][0]-ax,dy=pts[i][1]-ay,L=dx*dx+dy*dy;
+      let t=L?(-ax*dx-ay*dy)/L:0;
+      t=Math.max(0,Math.min(1,t));
+      const px=ax+t*dx,py=ay+t*dy,d=Math.hypot(px,py);
+      if(d<bd){bd=d;bx=px;by=py;}
+    }
+    return{d:bd,x:bx,y:by};
+  },
+  // Distance from a segment to a polygon (0 if it enters)
+  _segToPoly(ax,ay,bx,by,pts){
+    if(this._inside(ax,ay,pts)||this._inside(bx,by,pts))return 0;
+    let d=Infinity;
+    for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+      d=Math.min(d,this._segSeg([ax,ay],[bx,by],pts[j],pts[i]));
+      if(d===0)return 0;
+    }
+    return d;
+  },
+
+  // ── Pass 1: tallest obstacle inside a leg's corridor ──
+  maxHeightAlong(a,b,blds){
+    const mpl=111320,mplg=111320*Math.cos(a.lat*Math.PI/180);
+    const ax=0,ay=0,bx=(b.lng-a.lng)*mplg,by=(b.lat-a.lat)*mpl;
+    let maxH=0,hits=0;
+    const loX=Math.min(ax,bx)-this.CORRIDOR, hiX=Math.max(ax,bx)+this.CORRIDOR;
+    const loY=Math.min(ay,by)-this.CORRIDOR, hiY=Math.max(ay,by)+this.CORRIDOR;
+    for(const bl of blds){
+      const pts=this._toLocal(bl.ring,a.lat,a.lng);
+      let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+      for(const p of pts){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);}
+      if(x1<loX||x0>hiX||y1<loY||y0>hiY)continue;          // cheap bbox reject
+      if(this._segToPoly(ax,ay,bx,by,pts)<=this.CORRIDOR){hits++;if(bl.h>maxH)maxH=bl.h;}
+    }
+    return{maxH,hits};
+  },
+
+  // ── Pass 2: A* around footprints that can't be overflown ──
+  route(a,b,alt,blds){
+    const mpl=111320,mplg=111320*Math.cos(a.lat*Math.PI/180);
+    const gx=(b.lng-a.lng)*mplg, gy=(b.lat-a.lat)*mpl;
+    // The search area has to be wide enough to get around a whole city block,
+    // so scale it with the leg; coarsen the grid on long legs to stay bounded.
+    const legLen=Math.hypot(gx,gy)||1;
+    const pad=Math.max(90,Math.min(400,legLen*0.9));
+    const C=Math.max(this.CELL,Math.round(legLen/70));
+    const minX=Math.min(0,gx)-pad,maxX=Math.max(0,gx)+pad;
+    const minY=Math.min(0,gy)-pad,maxY=Math.max(0,gy)+pad;
+    const W=Math.ceil((maxX-minX)/C),H=Math.ceil((maxY-minY)/C);
+    if(W<2||H<2||W*H>250000)return null;                // leg too long to grid
+    const blocked=new Uint8Array(W*H);
+    const idx=(cx,cy)=>cy*W+cx;
+    // Rasterise only the blockers taller than our flight altitude
+    let blockers=0;
+    for(const bl of blds){
+      if(bl.h+this.VCLEAR<=alt)continue;                // we can fly over it
+      const pts=this._toLocal(bl.ring,a.lat,a.lng);
+      let bx0=1e9,bx1=-1e9,by0=1e9,by1=-1e9;
+      for(const p of pts){bx0=Math.min(bx0,p[0]);bx1=Math.max(bx1,p[0]);by0=Math.min(by0,p[1]);by1=Math.max(by1,p[1]);}
+      if(bx1<minX-this.MARGIN||bx0>maxX+this.MARGIN||by1<minY-this.MARGIN||by0>maxY+this.MARGIN)continue;
+      blockers++;
+      const c0=Math.max(0,Math.floor((bx0-this.MARGIN-minX)/C));
+      const c1=Math.min(W-1,Math.ceil((bx1+this.MARGIN-minX)/C));
+      const r0=Math.max(0,Math.floor((by0-this.MARGIN-minY)/C));
+      const r1=Math.min(H-1,Math.ceil((by1+this.MARGIN-minY)/C));
+      for(let cy=r0;cy<=r1;cy++)for(let cx=c0;cx<=c1;cx++){
+        if(blocked[idx(cx,cy)])continue;
+        const wx=minX+(cx+.5)*C, wy=minY+(cy+.5)*C;
+        if(this._distToPoly(wx,wy,pts)<=this.MARGIN)blocked[idx(cx,cy)]=1;
+      }
+    }
+    if(!blockers)return{path:null,blockers:0};          // nothing in the way
+    const s=[Math.round((0-minX)/C),Math.round((0-minY)/C)];
+    const g=[Math.round((gx-minX)/C),Math.round((gy-minY)/C)];
+    const clampC=p=>[Math.max(0,Math.min(W-1,p[0])),Math.max(0,Math.min(H-1,p[1]))];
+    const S=clampC(s),G=clampC(g);
+    blocked[idx(S[0],S[1])]=0;blocked[idx(G[0],G[1])]=0;   // never trap the ends
+    // A*
+    const N=W*H, gScore=new Float32Array(N).fill(Infinity), came=new Int32Array(N).fill(-1);
+    const done=new Uint8Array(N);
+    // Binary min-heap — a linear scan of the open set is far too slow on a
+    // grid this size, and the grid has to be big to route around a block.
+    const heap=[];
+    const hpush=(f,i)=>{heap.push([f,i]);let c=heap.length-1;
+      while(c>0){const p=(c-1)>>1;if(heap[p][0]<=heap[c][0])break;
+        const t=heap[p];heap[p]=heap[c];heap[c]=t;c=p;}};
+    const hpop=()=>{const top=heap[0],last=heap.pop();
+      if(heap.length){heap[0]=last;let p=0;
+        for(;;){const l=2*p+1,r=l+1;let s=p;
+          if(l<heap.length&&heap[l][0]<heap[s][0])s=l;
+          if(r<heap.length&&heap[r][0]<heap[s][0])s=r;
+          if(s===p)break;const t=heap[s];heap[s]=heap[p];heap[p]=t;p=s;}}
+      return top;};
+    const hEst=(cx,cy)=>Math.hypot(cx-G[0],cy-G[1]);
+    const sI=idx(S[0],S[1]), gI=idx(G[0],G[1]);
+    gScore[sI]=0;hpush(hEst(S[0],S[1]),sI);
+    const DIRS=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
+    let found=false,guard=0;
+    while(heap.length&&guard++<400000){
+      const[,cur]=hpop();
+      if(done[cur])continue;
+      done[cur]=1;
+      if(cur===gI){found=true;break;}
+      const cx=cur%W, cy=(cur-cx)/W;
+      for(const[dx,dy,w]of DIRS){
+        const nx=cx+dx,ny=cy+dy;
+        if(nx<0||ny<0||nx>=W||ny>=H)continue;
+        const ni=idx(nx,ny);if(blocked[ni]||done[ni])continue;
+        const t=gScore[cur]+w;
+        if(t<gScore[ni]){gScore[ni]=t;came[ni]=cur;hpush(t+hEst(nx,ny),ni);}
+      }
+    }
+    if(!found)return{path:null,blockers,blocked:true};
+    // Walk back, then string-pull to drop redundant corners
+    let cells=[];for(let c=gI;c!==-1;c=came[c])cells.push(c);cells.reverse();
+    const pt=c=>{const cx=c%W,cy=(c-cx)/W;return[minX+(cx+.5)*C,minY+(cy+.5)*C];};
+    const clear=(p,q)=>{
+      const d=Math.hypot(q[0]-p[0],q[1]-p[1]),n=Math.ceil(d/(C*.5));
+      for(let i=0;i<=n;i++){
+        const x=p[0]+(q[0]-p[0])*i/n, y=p[1]+(q[1]-p[1])*i/n;
+        const cx=Math.floor((x-minX)/C), cy=Math.floor((y-minY)/C);
+        if(cx<0||cy<0||cx>=W||cy>=H)return false;
+        if(blocked[idx(cx,cy)])return false;
+      }
+      return true;
+    };
+    const pts=cells.map(pt), simp=[pts[0]];
+    let i=0;
+    while(i<pts.length-1){
+      let j=pts.length-1;
+      while(j>i+1&&!clear(pts[i],pts[j]))j--;
+      simp.push(pts[j]);i=j;
+    }
+    const path=simp.slice(1,-1).map(p=>({lat:a.lat+p[1]/mpl, lng:a.lng+p[0]/mplg}));
+    return{path,blockers};
+  },
+
+  // ── Plan the whole mission ──
+  plan(waypoints,startPos){
+    const blds=this.buildings();
+    if(!blds.length)return{ok:false,reason:'no building data loaded for this area'};
+    const out=[];let climbs=0,detours=0,blockedLegs=0,scanned=blds.length;
+    let from={lat:startPos.lat,lng:startPos.lng};
+    for(const wp of waypoints){
+      const to={lat:wp.lat,lng:wp.lng};
+      // Pass 1 — climb over whatever sits in the leg's corridor. If the tallest
+      // obstacle is above the legal ceiling, go as high as allowed anyway; that
+      // still clears most of the block and leaves less to steer around.
+      const{maxH}=this.maxHeightAlong(from,to,blds);
+      let alt=wp.alt;
+      if(maxH+this.VCLEAR>alt){
+        alt=Math.round(Math.min(maxH+this.VCLEAR,this.MAX_ALT));climbs++;
+      }
+      // Pass 2 — route laterally around anything still too tall
+      let r=this.route(from,to,alt,blds);
+      // Boxed in? Go up first, then try again — that's the cheap way out
+      if(r&&r.blocked&&alt<this.MAX_ALT){
+        alt=this.MAX_ALT;climbs++;
+        r=this.route(from,to,alt,blds);
+      }
+      if(r&&r.path&&r.path.length){
+        r.path.forEach(p=>out.push({lat:p.lat,lng:p.lng,alt,spd:wp.spd||5,hold:0,detour:true}));
+        detours+=r.path.length;
+      }else if(r&&r.blocked){blockedLegs++;}
+      out.push({...wp,alt});
+      from=to;
+    }
+    this.last={waypoints:out,climbs,detours,blockedLegs,scanned};
+    return{ok:true,...this.last};
+  }
+};
+
+// ══════════════════════════════════════════════════════
+//  WEBSOCKET
+// ══════════════════════════════════════════════════════
+let ws=null,telTicks=0;
+let _wsUrl='ws://localhost:5000';
+let _reconnectTimer=null;
+let _lastTelTime=0;
+setInterval(()=>{document.getElementById('tel-hz').textContent=telTicks+' Hz';telTicks=0;},1000);
+// Signal-loss detection: warn once if connected but no telemetry for >2s
+let _sigLost=false;
+setInterval(()=>{
+  if(!state.simMode&&ws&&ws.readyState===WebSocket.OPEN){
+    const gap=Date.now()-_lastTelTime;
+    if(gap>2000&&!_sigLost){_sigLost=true;addAlert('Signal lost — no telemetry','danger');}
+    else if(gap<=2000&&_sigLost){_sigLost=false;addAlert('Signal restored','ok');}
+  }
+},1000);
+
+function connectDrone(){
+  _wsUrl=document.getElementById('ws-url').value.trim();
+  sysLog('Connecting to '+_wsUrl);setWs('connecting');
+  _doConnect();
+}
+function _doConnect(){
+  if(_reconnectTimer){clearTimeout(_reconnectTimer);_reconnectTimer=null;}
+  try{
+    ws=new WebSocket(_wsUrl);
+    ws.onopen=()=>{
+      setWs('live');state.simMode=false;stopSim();
+      sysLog('Connected','ok');addAlert('Live drone connected','ok');
+      if(_reconnectTimer){clearTimeout(_reconnectTimer);_reconnectTimer=null;}
+    };
+    ws.onmessage=e=>{try{_lastTelTime=Date.now();ingestMav(JSON.parse(e.data));telTicks++;}catch(_){}};
+    ws.onerror=()=>{sysLog('Connection error','warn');};
+    ws.onclose=()=>{
+      setWs('off');
+      if(!state.simMode){
+        sysLog('Reconnecting in 3s…','warn');
+        _reconnectTimer=setTimeout(_doConnect,3000);
+      }else{
+        fallbackSim();
+      }
+    };
+  }catch(e){sysLog('WebSocket failed: '+e.message,'danger');fallbackSim();}
+}
+function ingestMav(m){
+  const keys=['lat','lng','alt','vx','vy','vz','pitch','roll','hdg','battery','voltage','current','satellites','hdop'];
+  keys.forEach(k=>{if(m[k]!==undefined)state[k]=m[k];});
+  if(m.armed!==undefined)syncArm(m.armed);
+  if(m.mode!==undefined&&m.mode!==state.mode){
+    state.mode=m.mode;
+    document.getElementById('mode-pill').textContent=m.mode;
+    syncModeButtons(m.mode);
+  }
+  state.groundspeed=Math.sqrt(state.vx**2+state.vy**2);
+  state.airspeed=state.groundspeed+(state.windSpeed*.3);
+  updateUI();updateMapDrone();
+}
+function sendCmd(c){if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(c));}
+function setWs(s){
+  const d=document.getElementById('ws-dot'),t=document.getElementById('conn-txt'),p=document.getElementById('conn-pill');
+  const cfg={live:['var(--green)','Connected','g'],connecting:['var(--yellow)','Connecting...','y'],off:['var(--red)','Disconnected','']};
+  const[col,txt,cls]=cfg[s]||cfg.off;
+  d.style.background=col;t.textContent=txt;p.className='pill '+(cls?cls:'');
+}
+function fallbackSim(){state.simMode=true;simulateConnect();}
+
+// ══════════════════════════════════════════════════════
+//  SIM LOOP
+// ══════════════════════════════════════════════════════
+let simInterval=null;
+function simulateConnect(){
+  sysLog('Simulation started','ok');addAlert('Simulation connected — physics running','ok');
+  state.battery=85;state.mah_used=0;state.vx=0;state.vy=0;state.vz=0;
+  state.lat=SPAWN.lat;state.lng=SPAWN.lng;state.homeLat=SPAWN.lat;state.homeLng=SPAWN.lng;
+  PHYSICS.pid={ix:0,iz:0};startSim();
+}
+let simLastT=0;
+function startSim(){
+  stopSim();simLastT=Date.now();
+  simInterval=setInterval(()=>{
+    if(!state.simMode)return;
+    const now=Date.now(),elapsed=now-simLastT;simLastT=now;
+    const steps=Math.min(Math.round(elapsed/100),4);
+    for(let i=0;i<steps;i++){PHYSICS.tick(0.1);state.flightTicks++;}
+    if(steps>0){telTicks++;updateUI();updateMapDrone();missionTick();}
+  },50);
+}
+function stopSim(){if(simInterval){clearInterval(simInterval);simInterval=null;}}
+
+// ══════════════════════════════════════════════════════
+//  UI UPDATE
+// ══════════════════════════════════════════════════════
+const d2c=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(d/45)%8];
+function updateUI(){
+  // Left panel telemetry
+  document.getElementById('t-alt').innerHTML=state.alt.toFixed(1)+'<span class="tu"> m</span>';
+  document.getElementById('t-vspd').innerHTML=state.vz.toFixed(1)+'<span class="tu"> m/s</span>';
+  document.getElementById('t-spd').innerHTML=state.groundspeed.toFixed(1)+'<span class="tu"> m/s</span>';
+  document.getElementById('t-aspd').innerHTML=(state.airspeed||0).toFixed(1)+'<span class="tu"> m/s</span>';
+  document.getElementById('t-hdg').innerHTML=String(Math.round(state.hdg)).padStart(3,'0')+'<span class="tu">°</span>';
+  document.getElementById('t-dist').innerHTML=state.dist+'<span class="tu"> m</span>';
+  document.getElementById('t-hdop').textContent=state.hdop.toFixed(2);
+  const ft=Math.floor(state.flightTicks/10);
+  document.getElementById('t-ftime').textContent=String(Math.floor(ft/60)).padStart(2,'0')+':'+String(ft%60).padStart(2,'0');
+
+  // Battery
+  const b=Math.max(0,Math.min(100,state.battery));
+  if(b<=20&&Date.now()-_lastBatAlarm>8000){playBatteryAlarm();_lastBatAlarm=Date.now();addAlert('⚠️ LOW BATTERY: '+b.toFixed(0)+'%','danger');}
+  document.getElementById('bat-fill').style.width=b+'%';
+  document.getElementById('bat-fill').style.background=b>50?'var(--green)':b>20?'var(--yellow)':'var(--red)';
+  document.getElementById('bat-pct').textContent=b.toFixed(0)+'%';
+  document.getElementById('bat-pct').style.color=b>20?'#0a0e14':'#fff';
+  document.getElementById('t-volt').innerHTML=state.voltage.toFixed(1)+'<span class="tu">V</span>';
+  document.getElementById('t-curr').innerHTML=state.current.toFixed(1)+'<span class="tu">A</span>';
+  const ml=state.current>0?Math.max(0,(b-state.rtlBat)/100*4000/state.current/60):0;
+  const leftTxt=state.current>0?ml.toFixed(0)+'m':'∞';
+  document.getElementById('bat-est').textContent=state.current>0?'~'+leftTxt+' left':'∞';
+  document.getElementById('t-left').textContent=state.current>0?ml.toFixed(0)+'m':'∞';
+
+  // GPS pill
+  document.getElementById('gps-pill').textContent='GPS '+state.satellites+' sats';
+
+  // HUD overlays
+  document.getElementById('hud-alt').textContent=state.alt.toFixed(1);
+  document.getElementById('hud-vs').textContent=state.vz.toFixed(1);
+  document.getElementById('hud-gs').textContent=state.groundspeed.toFixed(1);
+  document.getElementById('hud-ds').textContent=state.dist;
+  document.getElementById('cam-hdg-hud').textContent='HDG '+String(Math.round(state.hdg)).padStart(3,'0')+'°';
+  document.getElementById('cam-coords').textContent=state.lat.toFixed(5)+', '+state.lng.toFixed(5);
+
+  // Status panel
+  const wStr=state.windSpeed.toFixed(1)+' m/s '+d2c(state.windDir);
+  document.getElementById('st-wind').textContent=wStr;
+
+  // Status bar
+  document.getElementById('sb-gps').textContent=state.satellites;
+  document.getElementById('sb-sats').textContent=state.satellites;
+  document.getElementById('sb-hdop').textContent=state.hdop.toFixed(1);
+  document.getElementById('sb-bat').textContent=b.toFixed(0)+'%';
+  document.getElementById('sb-wind').textContent=state.windSpeed.toFixed(1)+' m/s';
+  document.getElementById('sb-temp').textContent='28°C';
+  document.getElementById('sb-msgs').textContent=logCount;
+
+  // Radio stick bars + flight-assist readouts
+  updatePadBars();updateAssistUI();
+
+  // Altitude history graph
+  pushAltHistory();drawAltGraph();
+
+  // Attitude (HUD mini canvas)
+  drawAttitude();
+}
+
+// ══════════════════════════════════════════════════════
+//  ATTITUDE (mini HUD canvas)
+// ══════════════════════════════════════════════════════
+function drawAttitude(){
+  const c=document.getElementById('att-hud');if(!c)return;
+  const ctx=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H/2;
+  const pitchOffset=(state.pitch/45)*cy,rollRad=state.roll*Math.PI/180;
+  ctx.save();ctx.beginPath();ctx.rect(0,0,W,H);ctx.clip();
+  ctx.translate(cx,cy);ctx.rotate(rollRad);
+  ctx.fillStyle='#1d4ed8';ctx.fillRect(-W*2,-H*2,W*4,H*2+pitchOffset);
+  ctx.fillStyle='#92400e';ctx.fillRect(-W*2,pitchOffset,W*4,H*2);
+  ctx.strokeStyle='#ffffff';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(-W*2,pitchOffset);ctx.lineTo(W*2,pitchOffset);ctx.stroke();
+  ctx.restore();
+  // Reticle
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx-14,cy);ctx.lineTo(cx-5,cy);
+  ctx.moveTo(cx+5,cy);ctx.lineTo(cx+14,cy);
+  ctx.moveTo(cx,cy-4);ctx.lineTo(cx,cy+4);
+  ctx.stroke();
+  // Heading
+  ctx.fillStyle='#60a5fa';ctx.font='bold 9px monospace';
+  ctx.fillText(String(Math.round(state.hdg)).padStart(3,'0')+'°',cx-10,10);
+}
+window.addEventListener('load',()=>setTimeout(drawAttitude,100));
+
+// ══════════════════════════════════════════════════════
+//  ALTITUDE HISTORY GRAPH
+// ══════════════════════════════════════════════════════
+const ALT_HISTORY=[];const ALT_MAX=120;
+function pushAltHistory(){
+  ALT_HISTORY.push(state.alt);
+  if(ALT_HISTORY.length>ALT_MAX)ALT_HISTORY.shift();
+}
+function drawAltGraph(){
+  const c=document.getElementById('alt-graph');if(!c)return;
+  c.width=c.parentElement.clientWidth-24;
+  const ctx=c.getContext('2d'),W=c.width,H=c.height;
+  const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0a0e14';
+  const blue=getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()||'#3b82f6';
+  ctx.clearRect(0,0,W,H);
+  if(ALT_HISTORY.length<2)return;
+  const maxVal=Math.max(...ALT_HISTORY,1);
+  document.getElementById('alt-graph-max').textContent=maxVal.toFixed(0)+'m';
+  const pts=ALT_HISTORY.map((v,i)=>[(i/(ALT_MAX-1))*W,(1-v/maxVal)*(H-4)+2]);
+  // Filled area
+  ctx.beginPath();ctx.moveTo(pts[0][0],H);
+  pts.forEach(([x,y])=>ctx.lineTo(x,y));
+  ctx.lineTo(pts[pts.length-1][0],H);ctx.closePath();
+  ctx.fillStyle=blue+'1a';ctx.fill();
+  // Line
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+  pts.forEach(([x,y])=>ctx.lineTo(x,y));
+  ctx.strokeStyle=blue;ctx.lineWidth=1.5;ctx.stroke();
+  // Labels
+  ctx.fillStyle='rgba(100,116,139,0.9)';ctx.font='9px monospace';
+  ctx.fillText(maxVal.toFixed(0)+'m',2,10);
+  ctx.fillText('0m',2,H-2);
+}
+
+// ══════════════════════════════════════════════════════
+//  MAP
+// ══════════════════════════════════════════════════════
+let map,droneMarker,homeMarker,waypointLayer,mapLayerIdx=0;
+let flightPath=[]; let flightPathLine=null;
+let fenceCircle=null;
+const mapLayers=[
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
+];
+function initMap(){
+  map=L.map('map-container',{center:[state.lat,state.lng],zoom:16,zoomControl:true,attributionControl:false});
+  mapLayers[1].addTo(map); // start with satellite
+  droneMarker=L.marker([state.lat,state.lng],{icon:L.divIcon({html:`<svg width="20" height="20" viewBox="0 0 24 24"><polygon points="12,2 7,22 12,18 17,22" fill="#3b82f6" stroke="#0a0e14" stroke-width="1.5"/></svg>`,iconSize:[20,20],iconAnchor:[10,10],className:''}),zIndexOffset:1000}).addTo(map);
+  homeMarker=L.marker([state.homeLat,state.homeLng],{icon:L.divIcon({html:`<div style="width:11px;height:11px;background:var(--red);border-radius:50%;border:2px solid #fff;"></div>`,iconSize:[11,11],iconAnchor:[5,5],className:''})}).addTo(map).bindTooltip('Home',{permanent:true,direction:'right'});
+  waypointLayer=L.layerGroup().addTo(map);
+  map.on('click',e=>{
+    if(state.mode==='GUIDED'&&state.armed&&!state.simMode){
+      sendCmd({cmd:'GOTO',lat:e.latlng.lat,lng:e.latlng.lng,alt:Math.max(state.alt,10)});
+      addAlert('GOTO '+e.latlng.lat.toFixed(5)+', '+e.latlng.lng.toFixed(5),'ok');
+      return;
+    }
+    document.getElementById('wp-lat').value=e.latlng.lat.toFixed(6);
+    document.getElementById('wp-lng').value=e.latlng.lng.toFixed(6);
+    addWaypoint();
+    switchMapTab(document.querySelector('[onclick*="mission"]'),'mission');
+  });
+}
+function updateMapDrone(){if(!droneMarker)return;droneMarker.setLatLng([state.lat,state.lng]);const el=droneMarker.getElement();if(el)el.querySelector('svg').style.transform='rotate('+state.hdg+'deg)';updateFlightPath();}
+function updateFlightPath(){
+  if(!map)return;
+  flightPath.push([state.lat,state.lng]);
+  if(flightPath.length>300)flightPath.shift();
+  if(flightPathLine)map.removeLayer(flightPathLine);
+  if(flightPath.length>1)flightPathLine=L.polyline(flightPath,{color:'rgba(34,197,94,0.5)',weight:2}).addTo(map);
+}
+function toggleMapLayer(){map.removeLayer(mapLayers[mapLayerIdx]);mapLayerIdx=(mapLayerIdx+1)%mapLayers.length;mapLayers[mapLayerIdx].addTo(map);}
+function redrawRoute(){
+  waypointLayer.clearLayers();
+  if(!state.waypoints.length)return;
+  L.polyline([[state.lat,state.lng],...state.waypoints.map(w=>[w.lat,w.lng])],{color:'rgba(59,130,246,.5)',weight:2,dashArray:'6 4'}).addTo(waypointLayer);
+  state.waypoints.forEach((wp,i)=>{
+    const done=i<state.missionWpIdx,active=i===state.missionWpIdx&&state.missionActive;
+    const color=done?'#64748b':active?'#22c55e':wp.detour?'#eab308':'#3b82f6';
+    const sz=wp.detour?11:16;
+    const html=wp.detour
+      ? `<div style="width:11px;height:11px;border-radius:50%;background:${color}33;border:2px solid ${color};"></div>`
+      : `<div style="width:16px;height:16px;border-radius:50%;background:${color}22;border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-size:8px;color:${color};font-family:monospace;">${i+1}</div>`;
+    L.marker([wp.lat,wp.lng],{icon:L.divIcon({html,iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],className:''})})
+      .bindTooltip(wp.detour?`detour @${wp.alt}m`:`WP${i+1} @${wp.alt}m`,{direction:'top'}).addTo(waypointLayer);
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  CAMERA / AI
+// ══════════════════════════════════════════════════════
+let detCtx,camW,camH;
+let frameCount=0,lastFPS=Date.now(),fps=0;
+let detectionEnabled=true,usingWebcam=false,nightMode=false;
+let cocoModel=null,modelReady=false,videoStream=null;
+let simDetections=[],lastDetectTime=0;
+
+async function loadModel(){
+  try{
+    cocoModel=await cocoSsd.load({base:'lite_mobilenet_v2'});
+    modelReady=true;
+    document.getElementById('model-status').textContent='✓ COCO-SSD ready (80 classes)';
+    document.getElementById('model-status').style.color='var(--green)';
+    document.getElementById('ai-pill').textContent='AI scanning';
+    document.getElementById('ai-pill').className='pill g';
+    sysLog('COCO-SSD loaded','ok');addAlert('AI model ready — 80 classes','ok');
+  }catch(e){document.getElementById('model-status').textContent='Model failed — using sim';document.getElementById('model-status').style.color='var(--yellow)';}
+}
+function initCamera(){
+  const wrap=document.getElementById('cam-pane');
+  camW=wrap.clientWidth;camH=wrap.clientHeight;
+  const dc=document.getElementById('det-canvas');
+  dc.width=camW;dc.height=camH;
+  detCtx=dc.getContext('2d');
+  setInterval(()=>{
+    if(usingWebcam)return;
+    if(cam3dReady&&!cam3dFailed)update3DCam();
+  },33);
+  (function detLoop(){
+    requestAnimationFrame(detLoop);frameCount++;
+    const now=Date.now();
+    if(now-lastFPS>1000){fps=frameCount;frameCount=0;lastFPS=now;document.getElementById('cam-fps').textContent=fps;}
+    if(!usingWebcam&&FPV.on)FPV.render();
+    if(usingWebcam)runAI(now);
+    else if(document.getElementById('cam-status')&&document.getElementById('cam-status').style.display==='flex'){
+      if(detCtx)detCtx.clearRect(0,0,camW,camH);
+    }else drawSimDets();
+  })();
+}
+// ── Class colours ─────────────────────────────────────────────────────────────
+const CLASS_COLORS={
+  person:'#a78bfa',car:'#fb923c',truck:'#22c55e',dog:'#60a5fa',
+  bird:'#f9a8d4',bicycle:'#fde68a',cat:'#34d399',bus:'#f87171',
+  motorcycle:'#38bdf8',backpack:'#facc15',cell_phone:'#e879f9',
+};
+function _classColor(label){return CLASS_COLORS[label]||'#3b82f6';}
+
+// ── Camera mode state ─────────────────────────────────────────────────────────
+let _camTab='video'; // 'video' | 'payload' | 'tracking'
+let _trackTarget=null; // currently locked detection for tracking mode
+
+// Single owner of which camera layer is visible.
+// Stack: 3D map → live video → FPV lens → AI overlay. No 2D sim canvas.
+function showCamStatus(msg){
+  const el=document.getElementById('cam-status');
+  if(!el)return;
+  if(!msg){el.style.display='none';el.textContent='';return;}
+  el.style.display='flex';el.textContent=msg;
+}
+function updateCamLayers(){
+  const vid=document.getElementById('cam-video');
+  const fpv=document.getElementById('fpv-canvas');
+  const map3d=document.getElementById('cam-3d');
+  if(usingWebcam){
+    vid.style.display='block';
+    vid.style.visibility='visible';
+    vid.style.opacity='1';
+    vid.style.zIndex='10';
+    // visibility:hidden is not enough — MapLibre's WebGL canvas can still paint on top
+    if(map3d){map3d.style.display='none';map3d.style.visibility='hidden';}
+    if(fpv)fpv.style.display='none';
+    showCamStatus('');
+    return;
+  }
+  vid.style.display='none';
+  if(map3d){map3d.style.display='block';map3d.style.visibility='visible';}
+  const live3d=!!(cam3dReady&&!cam3dFailed);
+  if(fpv)fpv.style.display=(live3d&&FPV.on)?'block':'none';
+  if(cam3dFailed)showCamStatus('3D sim unavailable — click Webcam for live camera');
+  else if(!cam3dReady)showCamStatus('Loading 3D sim camera…');
+  else showCamStatus('');
+}
+
+async function listVideoInputs(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices)return [];
+  const all=await navigator.mediaDevices.enumerateDevices();
+  return all.filter(d=>d.kind==='videoinput');
+}
+
+async function openCameraStream(){
+  if(!window.isSecureContext){
+    throw new Error('Camera blocked: open http://localhost:5500 (not a LAN IP) or use HTTPS');
+  }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    throw new Error('This browser has no camera API');
+  }
+  const tries=[
+    {video:true,audio:false},
+    {video:{facingMode:{ideal:'user'}},audio:false},
+    {video:{width:{ideal:640},height:{ideal:480}},audio:false}
+  ];
+  let last=null;
+  for(const c of tries){
+    try{return await navigator.mediaDevices.getUserMedia(c);}
+    catch(e){last=e;}
+  }
+  const cams=await listVideoInputs();
+  for(const cam of cams){
+    if(!cam.deviceId)continue;
+    try{return await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:cam.deviceId}},audio:false});}
+    catch(e){last=e;}
+  }
+  const names=cams.map(c=>c.label||c.deviceId||'(unnamed)').join(', ')||'none';
+  const err=last||new Error('getUserMedia failed');
+  err.message=(err.name?err.name+': ':'')+(err.message||'')+' | Chrome cameras: '+names;
+  throw err;
+}
+
+function cameraHelp(err){
+  const name=err&&err.name?err.name:'';
+  if(name==='NotFoundError'||/Requested device not found/i.test(String(err&&err.message||''))){
+    return 'NotFoundError means Chrome sees 0 usable cameras.\n'
+      +'Site permission can be Allow and this still happens.\n\n'
+      +'On this Mac do this:\n'
+      +'1. Apple menu → System Settings → Privacy & Security → Camera\n'
+      +'2. Turn ON Google Chrome (this is separate from the site Allow)\n'
+      +'3. Quit Chrome fully (Cmd+Q) and reopen\n'
+      +'4. Open exactly http://localhost:5500/drone-cockpit.html\n'
+      +'5. Click Webcam again\n\n'
+      +'If Chrome is already ON: unplug/replug the cam, disable Continuity Camera, close Photo Booth.';
+  }
+  if(name==='NotReadableError'||name==='AbortError'){
+    return 'The camera is busy. Quit Zoom, Meet, Photo Booth, FaceTime, then click Webcam.';
+  }
+  if(name==='NotAllowedError'){
+    return 'Chrome site permission is blocked. Click the camera icon in the address bar → Allow.';
+  }
+  return String(err&&err.message||err);
+}
+
+async function switchToWebcam(){
+  const v=document.getElementById('cam-video');
+  try{
+    if(!window.isSecureContext){
+      throw new Error('Not a secure context — use http://localhost:5500/drone-cockpit.html');
+    }
+    if(videoStream){videoStream.getTracks().forEach(t=>t.stop());videoStream=null;}
+    videoStream=await openCameraStream();
+    clearTimeout(v._camTimer);v.onerror=null;v.removeAttribute('src');
+    v.muted=true;v.defaultMuted=true;v.playsInline=true;v.autoplay=true;
+    v.controls=false;
+    v.srcObject=videoStream;
+    usingWebcam=true;
+    updateCamLayers();
+    await new Promise(res=>{
+      if(v.readyState>=2){res();return;}
+      const done=()=>{v.removeEventListener('loadeddata',done);res();};
+      v.addEventListener('loadeddata',done);
+      setTimeout(res,1500);
+    });
+    try{await v.play();}catch(playErr){sysLog('video.play: '+playErr.message,'warn');}
+    const live=videoStream.getVideoTracks().some(t=>t.readyState==='live');
+    const w=v.videoWidth,h=v.videoHeight;
+    document.getElementById('cam-mode').textContent=live?(w?('WEBCAM '+w+'x'+h):'WEBCAM'):'WEBCAM?';
+    sysLog('Live camera '+(live?'playing':'opened')+(w?' '+w+'x'+h:''),'ok');
+    if(!live){
+      showCamStatus('Camera track is not live. Close Zoom/Meet and click Webcam again.');
+      return false;
+    }
+    return true;
+  }catch(e){
+    usingWebcam=false;
+    updateCamLayers();
+    const cams=await listVideoInputs().catch(()=>[]);
+    const list=cams.length?cams.map(c=>'- '+(c.label||'camera')).join('\n'):'- (none listed)';
+    const help=cameraHelp(e);
+    showCamStatus(help+'\n\nDevices Chrome lists:\n'+list);
+    sysLog('Camera unavailable: '+(e&&e.message?e.message:e),'warn');
+    addAlert('📷 Webcam failed — '+(e&&e.name?e.name:'error'),'warn');
+    return false;
+  }
+}
+
+// One-click: webcam on + AI on + highlight button
+async function activateWebcam(){
+  const ok=await switchToWebcam();
+  if(!ok){                                   // don't claim success after a failure
+    const wb=document.getElementById('webcam-btn');
+    if(wb)wb.classList.remove('on');
+    return false;
+  }
+  // Make sure AI detection is on
+  if(!detectionEnabled){
+    detectionEnabled=true;
+    const b1=document.getElementById('det-btn'),b2=document.getElementById('det-btn2');
+    if(b1){b1.classList.add('on');b1.textContent='🎯 AI Detect';}
+    if(b2){b2.classList.add('on');b2.textContent='ON';}
+  }
+  // Load model if not ready
+  if(!modelReady && !cocoModel){
+    sysLog('Loading AI model…','ok');
+    cocoSsd.load({base:'lite_mobilenet_v2'}).then(m=>{cocoModel=m;modelReady=true;sysLog('AI ready — detecting','ok');}).catch(e=>sysLog('Model error: '+e,'warn'));
+  }
+  // Highlight webcam button
+  const wb=document.getElementById('webcam-btn');
+  if(wb){wb.classList.add('on');}
+  addAlert('Webcam + AI Detection active','ok');
+  return true;
+}
+
+function setDroneCam(url){
+  if(!url)return;
+  const v=document.getElementById('cam-video');
+  if(videoStream){videoStream.getTracks().forEach(t=>t.stop());videoStream=null;}
+  // If the stream never loads, don't sit on a black pane — go back to SIM
+  v.onerror=()=>{addAlert('Drone cam stream failed — back to SIM','warn');sysLog('Drone cam error: '+url,'warn');switchToSim();};
+  clearTimeout(v._camTimer);
+  v._camTimer=setTimeout(()=>{
+    if(usingWebcam&&v.readyState<2){addAlert('Drone cam not responding — back to SIM','warn');switchToSim();}
+  },6000);
+  v.srcObject=null;v.src=url;
+  usingWebcam=true;
+  updateCamLayers();
+  document.getElementById('cam-mode').textContent='DRONE CAM';
+  sysLog('Drone camera: '+url,'ok');
+}
+
+function switchToSim(){
+  if(videoStream){videoStream.getTracks().forEach(t=>t.stop());videoStream=null;}
+  const v=document.getElementById('cam-video');
+  clearTimeout(v._camTimer);v.onerror=null;      // don't let a stale watchdog fire later
+  v.removeAttribute('src');v.srcObject=null;
+  usingWebcam=false;
+  updateCamLayers();
+  if(cam3d)try{cam3d.resize();}catch(e){}
+  document.getElementById('cam-mode').textContent=cam3dReady?'SIM 3D':'SIM';
+  document.getElementById('drone-cam-url').style.display='none';
+  _trackTarget=null;document.getElementById('track-lock').style.display='none';
+  const wb=document.getElementById('webcam-btn');if(wb)wb.classList.remove('on');
+}
+
+async function runAI(now){
+  if(!modelReady||!detectionEnabled){detCtx.clearRect(0,0,camW,camH);return;}
+  if(now-lastDetectTime<120)return;lastDetectTime=now;
+  const v=document.getElementById('cam-video');if(v.readyState<2)return;
+  try{
+    const preds=await cocoModel.detect(v);
+    detCtx.clearRect(0,0,camW,camH);
+    const sx=camW/(v.videoWidth||camW),sy=camH/(v.videoHeight||camH);
+    let cnt=0;const tl=document.getElementById('target-list');tl.innerHTML='';
+    // Filter to active targets, sort by confidence desc
+    const hits=preds.filter(p=>state.targets.has(p.class)&&p.score>=.35)
+                     .sort((a,b)=>b.score-a.score);
+    // In tracking mode, lock onto highest-confidence hit
+    if(_camTab==='tracking'&&hits.length>0){
+      _trackTarget=hits[0];
+      const tl2=document.getElementById('track-lock'),lb=document.getElementById('track-label');
+      const[tx,ty,tw,th]=_trackTarget.bbox;
+      const cx=(tx+tw/2)*sx,cy=(ty+th/2)*sy;
+      tl2.style.display='block';tl2.style.left=cx+'px';tl2.style.top=cy+'px';
+      lb.textContent=_trackTarget.class.toUpperCase()+' '+((_trackTarget.score)*100).toFixed(0)+'%';
+    } else if(_camTab==='tracking'&&hits.length===0){
+      document.getElementById('track-lock').style.display='none';_trackTarget=null;
+    }
+    lastDetections=hits.map(p=>p.class);
+    hits.forEach((p,idx)=>{
+      cnt++;const[x,y,w,h]=p.bbox;
+      const isLocked=_camTab==='tracking'&&idx===0;
+      drawBox(detCtx,x*sx,y*sy,w*sx,h*sy,p.class,p.score,isLocked);
+      addTgtItem(tl,p.class,p.score);
+    });
+    updateAIBadge(cnt);
+  }catch(_){}
+}
+
+function drawBox(ctx,x,y,w,h,label,conf,locked=false){
+  const color=_classColor(label);
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.strokeStyle=color;
+  ctx.lineWidth=locked?3:2.5;
+  ctx.strokeRect(x,y,w,h);
+  const text=label.toUpperCase()+'  '+(conf*100).toFixed(0)+'%';
+  ctx.font='600 12px Inter,monospace';
+  const pad=6, th=18, tw=Math.min(w, ctx.measureText(text).width+pad*2);
+  ctx.fillStyle='rgba(10,14,20,.92)';
+  ctx.fillRect(x,y,tw,th);
+  ctx.fillStyle=color;
+  ctx.fillText(text,x+pad,y+13);
+  if(locked){
+    ctx.strokeStyle='#ef4444';
+    ctx.lineWidth=1.5;
+    ctx.strokeRect(x-4,y-4,w+8,h+8);
+  }
+  ctx.restore();
+}
+const emojis={person:'👤',car:'🚗',truck:'🚛',dog:'🐕',bird:'🐦',bicycle:'🚲',cat:'🐱',bus:'🚌'};
+function addTgtItem(container,label,conf){
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--sur2);border:1px solid var(--brd);border-radius:4px;margin-bottom:4px;font-size:11px;';
+  d.innerHTML=`<span style="font-size:14px;">${emojis[label]||'📦'}</span><span style="flex:1;">${label}</span><span style="font-family:monospace;color:var(--green);">${(conf*100).toFixed(0)}%</span>`;
+  container.appendChild(d);
+}
+function updateAIBadge(cnt){
+  document.getElementById('det-total').textContent=cnt;
+  document.getElementById('cam-det-count').textContent='Targets: '+cnt;
+  const p=document.getElementById('ai-pill');
+  if(cnt>0){p.className='pill y';p.textContent=cnt+' target'+(cnt>1?'s':'');}
+  else if(detectionEnabled&&modelReady){p.className='pill g';p.textContent='AI scanning';}
+}
+const SIM_OBJS=[{label:'person',w:22,h:45},{label:'car',w:65,h:32},{label:'truck',w:85,h:38},{label:'dog',w:20,h:16}];
+function drawSimDets(){
+  detCtx.clearRect(0,0,camW,camH);if(!detectionEnabled)return;
+  const now=Date.now(),alive=simDetections.filter(d=>now-d.born<d.life);
+  if(alive.length<3&&Math.random()<.015){
+    const t=SIM_OBJS.filter(o=>state.targets.has(o.label));
+    if(t.length){const s=t[Math.floor(Math.random()*t.length)];alive.push({...s,x:Math.random()*(camW-s.w-20)+10,y:Math.random()*(camH-s.h-40)+10,conf:.7+Math.random()*.28,life:4000+Math.random()*5000,born:now,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.15,alerted:false});}
+  }
+  simDetections=alive;
+  lastDetections=alive.map(d=>d.label);
+  const tl=document.getElementById('target-list');tl.innerHTML='';
+  alive.forEach(d=>{
+    const age=now-d.born,fade=Math.min(1,age/300)*(d.life-age<500?(d.life-age)/500:1);
+    d.x=Math.max(5,Math.min(camW-d.w-5,d.x+d.vx));d.y=Math.max(5,Math.min(camH-d.h-35,d.y+d.vy));
+    detCtx.globalAlpha=fade;drawBox(detCtx,d.x,d.y,d.w,d.h,d.label,d.conf);detCtx.globalAlpha=1;
+    if(!d.alerted){d.alerted=true;addDetectionAlert(d.label,d.conf);}
+    addTgtItem(tl,d.label,d.conf);
+  });
+  updateAIBadge(alive.length);
+}
+// ══════════════════════════════════════════════════════
+//  3D SIM CAMERA (MapLibre GL — real satellite map in perspective)
+//  If MapLibre can't load, show a status message — there is no 2D sim path.
+// ══════════════════════════════════════════════════════
+let cam3d=null,cam3dReady=false,cam3dFailed=false;
+function init3DCam(){
+  if(typeof maplibregl==='undefined'){
+    cam3dFailed=true;sysLog('MapLibre unavailable — use Webcam','warn');updateCamLayers();return;
+  }
+  try{
+    cam3d=new maplibregl.Map({
+      container:'cam-3d',
+      style:{
+        version:8,
+        sources:{
+          sat:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19},
+          omt:{type:'vector',url:'https://tiles.openfreemap.org/planet'}
+        },
+        layers:[
+          {id:'sat',type:'raster',source:'sat'},
+          {id:'bldg',type:'fill-extrusion',source:'omt','source-layer':'building',minzoom:13,
+           paint:{
+             'fill-extrusion-color':'#8a93a6','fill-extrusion-opacity':.85,
+             'fill-extrusion-height':['coalesce',['get','render_height'],12],
+             'fill-extrusion-base':['coalesce',['get','render_min_height'],0]
+           }}
+        ]
+      },
+      center:[state.lng,state.lat],zoom:17.5,pitch:60,bearing:0,
+      maxPitch:85,                       // default is 60 — FPV needs the horizon
+      preserveDrawingBuffer:true,        // required to sample the map as a texture
+      interactive:false,attributionControl:false
+    });
+    const ready=src=>{
+      if(cam3dReady)return;
+      cam3dReady=true;
+      // Atmospheric sky + horizon haze so high-pitch FPV views look right
+      try{cam3d.setSky({
+        'sky-color':'#8fbfe8','sky-horizon-blend':.6,
+        'horizon-color':'#cddced','horizon-fog-blend':.7,
+        'fog-color':'#dce8f2','fog-ground-blend':.05
+      });}catch(e){}
+      updateCamLayers();          // hand the pane over from the 2D fallback
+      sysLog('3D sim camera ready ('+src+')','ok');
+      addAlert('3D camera active — live satellite view','ok');
+    };
+    cam3d.on('load',()=>ready('load'));
+    // 'load' waits for every tile of every source; the style alone is enough to
+    // start flying, so don't let a slow/blocked tile server stall the camera.
+    // styledata can fire before isStyleLoaded() flips true, so poll as well.
+    cam3d.on('styledata',()=>{if(cam3d.isStyleLoaded&&cam3d.isStyleLoaded())ready('style');});
+    const poll=setInterval(()=>{
+      if(cam3dReady||cam3dFailed){clearInterval(poll);return;}
+      if(cam3d.isStyleLoaded&&cam3d.isStyleLoaded()){ready('poll');clearInterval(poll);}
+    },400);
+    setTimeout(()=>clearInterval(poll),25000);
+    cam3d.on('error',e=>{
+      const msg=(e&&e.error&&e.error.message)||'tile error';
+      if(!cam3d._loggedErr){cam3d._loggedErr=true;sysLog('3D cam: '+msg,'warn');}
+    });
+  }catch(e){cam3dFailed=true;sysLog('3D cam init failed: '+e.message,'warn');updateCamLayers();}
+}
+// Gimbal-smoothed camera pose (a real camera gimbal lags and damps drone motion)
+const GIMBAL={lat:null,lng:null,brg:0,pitch:70,zoom:17,K:.16};
+function update3DCam(){
+  const el=document.getElementById('cam-3d');
+  // Camera height = drone altitude + eye height; manual +/- zoom pulls it closer
+  const camAlt=state.alt/state.zoom+1.6;
+  // Zoom so the visible ground width matches a ~60° FOV at camAlt
+  // (MapLibre 512px-tile resolution: 78271.5*cos(lat)/2^z m/px)
+  const w=el.clientWidth||400;
+  const groundW=Math.max(camAlt*1.15,10);
+  const zT=Math.min(19.5,Math.log2(78271.5*Math.cos(state.lat*Math.PI/180)*w/groundW));
+  // On the ground look at the horizon; in the air 60° FPV, nodding with pitch.
+  // FPV cams are physically tilted up 15–40° so you see where you're going.
+  const acro=state.mode==='ACRO';
+  const groundLift=Math.max(0,3-state.alt)*6;
+  const uptilt=FPV.on?FPV.uptilt:0;
+  const pitchT=Math.max(10,Math.min(85,60+state.pitch+groundLift+uptilt));
+  // An FPV cam is HARD-MOUNTED (follows the airframe 1:1); a delivery drone's
+  // gimbal is stabilized (damped, horizon held level).
+  const hard=acro||FPV.on;
+  const g=GIMBAL,k=hard?0.9:g.K;
+  if(g.lat===null){g.lat=state.lat;g.lng=state.lng;g.brg=state.hdg;g.pitch=pitchT;g.zoom=zT;}
+  g.lat+=(state.lat-g.lat)*k;g.lng+=(state.lng-g.lng)*k;
+  g.pitch+=(pitchT-g.pitch)*k;g.zoom+=(zT-g.zoom)*k;
+  const db=((state.hdg-g.brg+540)%360)-180;   // shortest-way heading wrap
+  g.brg=(g.brg+db*k+360)%360;
+  cam3d.jumpTo({
+    center:[g.lng,g.lat],
+    bearing:g.brg,
+    pitch:g.pitch,
+    roll:hard?-state.roll:-state.roll*.15,   // hard-mount banks; gimbal stays level
+    zoom:g.zoom
+  });
+  // The FPV shader does its own night-vision pass — don't double-tint
+  el.style.filter=(nightMode&&!FPV.on)?'brightness(.3) sepia(1) hue-rotate(55deg) saturate(4)':'';
+  const m=document.getElementById('cam-mode');
+  m.textContent=(FPV.on?'FPV':'SIM 3D')+(acro?' ACRO':'')+(state.inverted?' ⚠INV':'');
+}
+// ══════════════════════════════════════════════════════
+//  FPV LENS POST-PROCESS (WebGL)
+//  Barrel distortion, chromatic aberration, motion blur, prop-wash shake,
+//  vignette, analog scanlines and sensor noise — the FPV "look".
+// ══════════════════════════════════════════════════════
+const FPV={
+  on:false, ready:false, failed:false, gl:null, prog:null, tex:null, u:{},
+  uptilt:20,            // real FPV cams sit tilted up 15–40°
+  t:0, shakeX:0, shakeY:0,
+  VS:`attribute vec2 aPos;varying vec2 vUv;
+      void main(){vUv=aPos*0.5+0.5;gl_Position=vec4(aPos,0.0,1.0);}`,
+  FS:`precision mediump float;
+    varying vec2 vUv;
+    uniform sampler2D uTex;
+    uniform float uTime,uBarrel,uChroma,uVig,uNoise,uBlur,uNight,uScan;
+    uniform vec2 uShake,uBlurDir;
+    vec2 distort(vec2 uv,float k){
+      vec2 c=uv-0.5;
+      float r2=dot(c,c);
+      c*=(1.0+k*r2)/(1.0+k*0.25);
+      return 0.5+c;
+    }
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    void main(){
+      vec2 uv=vUv+uShake;
+      vec2 uvR=distort(uv,uBarrel+uChroma);
+      vec2 uvG=distort(uv,uBarrel);
+      vec2 uvB=distort(uv,uBarrel-uChroma);
+      vec3 acc=vec3(0.0);
+      const int N=5;
+      for(int i=0;i<N;i++){
+        float f=float(i)/float(N-1)-0.5;
+        vec2 off=uBlurDir*f*uBlur;
+        vec2 rad=(uvG-0.5)*f*uBlur*0.5;
+        acc.r+=texture2D(uTex,uvR+off+rad).r;
+        acc.g+=texture2D(uTex,uvG+off+rad).g;
+        acc.b+=texture2D(uTex,uvB+off+rad).b;
+      }
+      vec3 col=acc/float(N);
+      if(uvG.x<0.0||uvG.x>1.0||uvG.y<0.0||uvG.y>1.0)col=vec3(0.0);
+      if(uNight>0.5){
+        float l=dot(col,vec3(0.299,0.587,0.114));
+        col=vec3(l*0.12,l*1.18,l*0.28);
+      }
+      float r=length(vUv-0.5);
+      col*=1.0-uVig*smoothstep(0.22,0.85,r);
+      col*=1.0-uScan*0.35*step(0.5,fract(vUv.y*170.0));
+      col+=(hash(vUv*512.0+vec2(uTime))-0.5)*uNoise;
+      gl_FragColor=vec4(col,1.0);
+    }`,
+  init(){
+    if(this.ready||this.failed)return this.ready;
+    const c=document.getElementById('fpv-canvas');
+    if(!c){this.failed=true;return false;}
+    const gl=c.getContext('webgl',{alpha:false,antialias:false,depth:false});
+    if(!gl){this.failed=true;sysLog('WebGL unavailable — FPV lens off','warn');return false;}
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(sh));return sh;};
+    try{
+      const p=gl.createProgram();
+      gl.attachShader(p,mk(gl.VERTEX_SHADER,this.VS));
+      gl.attachShader(p,mk(gl.FRAGMENT_SHADER,this.FS));
+      gl.linkProgram(p);
+      if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+      gl.useProgram(p);
+      const buf=gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+      const loc=gl.getAttribLocation(p,'aPos');
+      gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+      const tex=gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D,tex);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+      ['uTex','uTime','uBarrel','uChroma','uVig','uNoise','uBlur','uNight','uScan','uShake','uBlurDir']
+        .forEach(n=>this.u[n]=gl.getUniformLocation(p,n));
+      this.gl=gl;this.prog=p;this.tex=tex;this.ready=true;
+      return true;
+    }catch(e){this.failed=true;sysLog('FPV shader failed: '+e.message,'warn');return false;}
+  },
+  render(){
+    if(!this.ready||!cam3dReady)return;
+    const src=cam3d.getCanvas();if(!src||!src.width)return;
+    const c=document.getElementById('fpv-canvas'),gl=this.gl;
+    if(c.width!==camW||c.height!==camH){c.width=camW;c.height=camH;}
+    this.t+=0.016;
+    // Prop-wash vibration: scales with throttle and airspeed
+    const vib=(state.armed?state.thrust*0.9+state.groundspeed*0.03:0);
+    this.shakeX=(Math.random()-.5)*0.0016*vib;
+    this.shakeY=(Math.random()-.5)*0.0016*vib;
+    // Motion blur: radial from speed, lateral from yaw rate
+    const spd=Math.hypot(state.vx,state.vy,state.vz);
+    const yawRate=Math.abs(((state.hdg-(this._lastHdg??state.hdg)+540)%360)-180);
+    this._lastHdg=state.hdg;
+    const blur=Math.min(0.05,spd*0.0016+yawRate*0.004);
+    gl.viewport(0,0,c.width,c.height);
+    gl.useProgram(this.prog);
+    gl.bindTexture(gl.TEXTURE_2D,this.tex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
+    const u=this.u;
+    gl.uniform1i(u.uTex,0);
+    gl.uniform1f(u.uTime,this.t);
+    gl.uniform1f(u.uBarrel,0.22);
+    gl.uniform1f(u.uChroma,0.02);
+    gl.uniform1f(u.uVig,nightMode?0.75:0.45);
+    gl.uniform1f(u.uNoise,nightMode?0.10:0.03);
+    gl.uniform1f(u.uBlur,blur);
+    gl.uniform1f(u.uNight,nightMode?1:0);
+    gl.uniform1f(u.uScan,nightMode?0.35:0.12);
+    gl.uniform2f(u.uShake,this.shakeX,this.shakeY);
+    gl.uniform2f(u.uBlurDir,1,0);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  }
+};
+function toggleFPV(){
+  if(!FPV.on&&!FPV.init()){addAlert('FPV lens unavailable (no WebGL)','warn');return;}
+  FPV.on=!FPV.on;
+  document.getElementById('fpv-btn').classList.toggle('on',FPV.on);
+  document.getElementById('cam-3d').style.filter='';
+  updateCamLayers();
+  if(FPV.on&&usingWebcam)addAlert('FPV lens applies to the SIM view — switch off webcam to see it','warn');
+  else addAlert(FPV.on?'FPV lens ON — '+FPV.uptilt+'° uptilt':'FPV lens OFF','ok');
+}
+
+// ══════════════════════════════════════════════════════
+//  WAYPOINTS
+// ══════════════════════════════════════════════════════
+function addWaypoint(){
+  const lat=parseFloat(document.getElementById('wp-lat').value),lng=parseFloat(document.getElementById('wp-lng').value);
+  const alt=parseFloat(document.getElementById('wp-alt').value)||30;
+  if(isNaN(lat)||isNaN(lng)){sysLog('Invalid coords','warn');return;}
+  state.waypoints.push({lat,lng,alt,spd:5,hold:2});
+  document.getElementById('wp-lat').value='';document.getElementById('wp-lng').value='';
+  renderWPs();redrawRoute();sysLog('WP'+state.waypoints.length+' added','ok');
+}
+function renderWPs(){
+  const el=document.getElementById('waypoint-list');el.innerHTML='';
+  state.waypoints.forEach((wp,i)=>{
+    const done=i<state.missionWpIdx,active=i===state.missionWpIdx&&state.missionActive;
+    const d=document.createElement('div');d.className='wp-item';
+    const col=done?'var(--muted)':active?'var(--green)':'var(--blue)';
+    d.innerHTML=`<div class="wp-num" style="color:${col};">WP${i+1}</div><div class="wp-txt">${wp.lat.toFixed(4)},${wp.lng.toFixed(4)} @${wp.alt}m</div><div class="wp-del" onclick="removeWP(${i})">×</div>`;
+    el.appendChild(d);
+  });
+  document.getElementById('wp-count').textContent=state.waypoints.length+' waypoints';
+}
+function removeWP(i){state.waypoints.splice(i,1);if(state.missionWpIdx>i)state.missionWpIdx--;renderWPs();redrawRoute();}
+
+// ── Re-plan the mission around real buildings ────────────────────────────────
+let originalRoute=null,originalLine=null;
+function planRoute(){
+  if(!state.waypoints.length){addAlert('No waypoints to plan','warn');return;}
+  const st=document.getElementById('plan-status');
+  const before=state.waypoints.map(w=>({...w}));
+  const r=PLANNER.plan(before,{lat:state.lat,lng:state.lng});
+  if(!r.ok){
+    st.textContent='⚠ '+r.reason;st.style.color='var(--yellow)';
+    addAlert('Planner: '+r.reason,'warn');
+    sysLog('Planner needs the 3D map loaded over the route area','warn');
+    return;
+  }
+  originalRoute=before;
+  state.waypoints=r.waypoints;state.missionWpIdx=0;
+  renderWPs();redrawRoute();drawOriginalRoute();
+  const msg=r.detours+' detour'+(r.detours===1?'':'s')+', '+r.climbs+' climb'+(r.climbs===1?'':'s');
+  st.textContent=msg+' · '+r.scanned+' buildings';
+  st.style.color=r.blockedLegs?'var(--yellow)':'var(--green)';
+  addAlert('Route planned: '+msg,'ok');
+  sysLog('Planner: '+msg+' over '+r.scanned+' footprints'+(r.blockedLegs?' ('+r.blockedLegs+' leg(s) unroutable)':''),'ok');
+  if(r.blockedLegs)addAlert('⚠ '+r.blockedLegs+' leg(s) fully blocked — no path found','warn');
+}
+function drawOriginalRoute(){
+  if(originalLine){map.removeLayer(originalLine);originalLine=null;}
+  if(!originalRoute||!originalRoute.length)return;
+  originalLine=L.polyline([[state.lat,state.lng],...originalRoute.map(w=>[w.lat,w.lng])],
+    {color:'rgba(239,68,68,.45)',weight:1.5,dashArray:'3 6'}).addTo(map);
+  originalLine.bindTooltip('direct route (unsafe)',{sticky:true});
+}
+function clearWaypoints(){
+  state.waypoints=[];state.missionWpIdx=0;renderWPs();redrawRoute();
+  originalRoute=null;if(originalLine&&map){map.removeLayer(originalLine);originalLine=null;}
+  const st=document.getElementById('plan-status');if(st){st.textContent='not planned';st.style.color='var(--muted)';}
+}
+function addScanPattern(){
+  clearWaypoints();
+  const rows=4,cols=3,dlat=.0008,dlng=.0012,bla=state.lat+.001,blg=state.lng-.002;
+  for(let c=0;c<cols;c++)for(let r=0;r<rows;r++){const rr=c%2===0?r:rows-1-r;document.getElementById('wp-lat').value=(bla+rr*dlat).toFixed(6);document.getElementById('wp-lng').value=(blg+c*dlng).toFixed(6);document.getElementById('wp-alt').value=state.scanAlt;addWaypoint();}
+  sysLog('Scan grid loaded','ok');addAlert('Scan grid: '+(rows*cols)+' waypoints','ok');
+}
+
+// ══════════════════════════════════════════════════════
+//  MISSION
+// ══════════════════════════════════════════════════════
+function missionTick(){
+  if(!state.missionActive)return;
+  const total=state.waypoints.length;
+  if(state.missionWpIdx>=total){state.missionActive=false;document.getElementById('mission-status').textContent='Complete ✓';document.getElementById('mission-progress').style.width='100%';addAlert('Mission complete','ok');document.getElementById('mode-pill').textContent='RTL';return;}
+  const wp=state.waypoints[state.missionWpIdx];
+  const mpl=111320,mplg=111320*Math.cos(state.lat*Math.PI/180);
+  const dl=(wp.lat-state.lat)*mpl,dg=(wp.lng-state.lng)*mplg,dist=Math.sqrt(dl**2+dg**2);
+  if(dist>2){const ang=Math.atan2(dg,dl),spd=Math.min(wp.spd,dist*.5);state.vx+=(Math.cos(ang)*spd-state.vx)*.05;state.vy+=(Math.sin(ang)*spd-state.vy)*.05;state.hdg=((ang*180/Math.PI)+360)%360;}
+  else{state.missionWpIdx++;renderWPs();redrawRoute();}
+  const prog=(state.missionWpIdx/total)*100;
+  document.getElementById('mission-progress').style.width=prog+'%';
+  document.getElementById('mission-status').textContent=state.missionWpIdx+'/'+total+' waypoints';
+  document.getElementById('scan-progress').style.width=prog+'%';
+  document.getElementById('scan-status').textContent='Scan '+prog.toFixed(0)+'%  |  Bat '+state.battery.toFixed(0)+'%';
+}
+// ── AI assist: will the battery actually survive this mission? ───────────────
+function missionEnergy(){
+  const mpl=111320,mplg=111320*Math.cos(state.lat*Math.PI/180);
+  const seg=(a,b)=>Math.hypot((b[0]-a[0])*mpl,(b[1]-a[1])*mplg);
+  let d=0,prev=[state.lat,state.lng];
+  state.waypoints.forEach(w=>{d+=seg(prev,[w.lat,w.lng]);prev=[w.lat,w.lng];});
+  d+=seg(prev,[state.homeLat,state.homeLng]);        // include the flight home
+  const speed=5, time=d/speed;
+  const amps=state.current>1?state.current:18;
+  const pct=(amps*time/3600*1000)/4000*100;          // of a 4000 mAh pack
+  return {dist:Math.round(d), mins:time/60, pct};
+}
+// ── AI assist: is the ground below clear of people and vehicles? ─────────────
+let lastDetections=[];
+function landingZoneClear(){
+  const blockers=lastDetections.filter(l=>l==='person'||l==='car'||l==='truck'||l==='bicycle');
+  return{clear:blockers.length===0, blockers:[...new Set(blockers)]};
+}
+
+function startMission(){
+  if(!state.armed){addAlert('Arm first','warn');return;}
+  if(!state.waypoints.length){addAlert('No waypoints','warn');return;}
+  const e=missionEnergy();
+  const usable=state.battery-state.rtlBat;
+  if(e.pct>usable){
+    addAlert('⚠ Mission needs ~'+e.pct.toFixed(0)+'% battery, only '+usable.toFixed(0)+'% usable','danger');
+    sysLog('Mission blocked: '+e.dist+'m needs '+e.pct.toFixed(0)+'%, have '+usable.toFixed(0)+'%','danger');
+    if(!window._missionOverride){window._missionOverride=true;setTimeout(()=>window._missionOverride=false,8000);
+      addAlert('Press Start again within 8s to override','warn');return;}
+  }
+  window._missionOverride=false;
+  addAlert('Mission check: '+e.dist+'m, ~'+e.mins.toFixed(1)+'min, ~'+e.pct.toFixed(0)+'% battery','ok');
+  if(!state.simMode){sendCmd({cmd:'START_MISSION',waypoints:state.waypoints});return;}
+  state.missionActive=true;state.missionWpIdx=0;state.scanActive=true;
+  document.getElementById('mode-pill').textContent='AUTO';
+  addAlert('Mission started — '+state.waypoints.length+' waypoints','ok');
+}
+function pauseMission(){state.missionActive=false;addAlert('Mission paused','warn');}
+function resumeMission(){if(state.waypoints.length){state.missionActive=true;addAlert('Mission resumed','ok');}}
+function abortMission(){state.missionActive=false;state.missionWpIdx=0;addAlert('Mission aborted','danger');rtl();}
+
+// ══════════════════════════════════════════════════════
+//  CONTROLS
+// ══════════════════════════════════════════════════════
+function preflightCheck(){
+  if(state.satellites<6)addAlert('Pre-flight: low satellites ('+state.satellites+')','warn');
+  if(state.battery<=25)addAlert('Pre-flight: low battery ('+state.battery.toFixed(0)+'%)','warn');
+  if(state.hdop>=2.0)addAlert('Pre-flight: poor GPS accuracy HDOP ('+state.hdop.toFixed(2)+')','warn');
+}
+function toggleArm(){
+  const arming=!state.armed;
+  state.armed=arming;
+  state._rtlTriggered=false;PHYSICS.pid={ix:0,iz:0};
+  if(arming)preflightCheck();
+  if(!state.simMode)sendCmd({cmd:arming?'ARM':'DISARM'});
+  syncArm(arming);
+}
+function syncArm(armed){
+  state.armed=armed;
+  const btn=document.getElementById('arm-btn'),pill=document.getElementById('arm-pill');
+  if(armed){
+    btn.textContent='⚡ DISARM';btn.className='fbtn land-b';
+    pill.className='pill g';pill.textContent='ARMED';
+    addAlert('Armed — ready to fly','ok');sysLog('Armed','ok');
+  }else{
+    btn.textContent='⚡ ARM';btn.className='fbtn armed';
+    pill.className='pill r';pill.textContent='DISARMED';
+    addAlert('Disarmed','ok');state.missionActive=false;
+  }
+}
+function takeoff(){
+  if(!state.armed){addAlert('Arm first','warn');return;}
+  if(!state.simMode){sendCmd({cmd:'TAKEOFF',alt:10});return;}
+  // Climb in LOITER so the drone holds altitude when the burst ends
+  // (STABILIZE neutral-stick thrust is below hover — it would sink back down)
+  state.mode='LOITER';PHYSICS._loiterAlt=state.alt;PHYSICS.pid.iz=0;
+  document.getElementById('mode-pill').textContent='LOITER';
+  syncModeButtons('LOITER');
+  state.joy.throttle=.6;setTimeout(()=>state.joy.throttle=0,3000);
+  addAlert('Takeoff','ok');
+}
+let _landWatcher=null;
+function land(){
+  // AI assist: refuse to land on top of people or vehicles (one override press)
+  const z=landingZoneClear();
+  if(!z.clear&&!window._landOverride){
+    window._landOverride=true;setTimeout(()=>window._landOverride=false,8000);
+    addAlert('⛔ Landing zone blocked: '+z.blockers.join(', ')+' — press LAND again to override','danger');
+    sysLog('Landing blocked — '+z.blockers.join(', ')+' in drop zone','danger');
+    return;
+  }
+  window._landOverride=false;
+  if(!state.simMode)sendCmd({cmd:'LAND'});
+  state.joy.throttle=-.8;state.missionActive=false;
+  addAlert('Landing','warn');document.getElementById('mode-pill').textContent='LAND';
+  // Sim: auto-disarm on touchdown like real ArduPilot LAND
+  if(state.simMode&&!_landWatcher){
+    _landWatcher=setInterval(()=>{
+      if(state.alt<=0.05){
+        clearInterval(_landWatcher);_landWatcher=null;
+        state.joy.throttle=0;
+        if(state.armed){syncArm(false);addAlert('Touchdown — motors disarmed','ok');}
+      }
+    },200);
+  }
+}
+function rtl(){if(!state.simMode){sendCmd({cmd:'RTL'});return;}state.missionActive=false;state.waypoints=[{lat:state.homeLat,lng:state.homeLng,alt:10,spd:5,hold:2}];state.missionWpIdx=0;state.missionActive=true;addAlert('RTL activated','warn');document.getElementById('mode-pill').textContent='RTL';}
+function holdPos(){if(!state.simMode){sendCmd({cmd:'SET_MODE',mode:'LOITER'});return;}state.mode='LOITER';PHYSICS._loiterAlt=state.alt;document.getElementById('mode-pill').textContent='LOITER';addAlert('Holding position','ok');}
+let _followMeWatcher=null;
+function followMe(){
+  if(_followMeWatcher!==null){
+    navigator.geolocation.clearWatch(_followMeWatcher);
+    _followMeWatcher=null;
+    addAlert('Follow Me OFF','ok');
+    return;
+  }
+  if(!navigator.geolocation){addAlert('Geolocation not supported','warn');return;}
+  if(!state.armed){addAlert('Arm drone first','warn');return;}
+  addAlert('Follow Me ON — tracking your GPS','ok');
+  _followMeWatcher=navigator.geolocation.watchPosition(
+    pos=>{
+      const{latitude:lat,longitude:lng}=pos.coords;
+      const alt=Math.max(state.alt,15);
+      if(!state.simMode)sendCmd({cmd:'GOTO',lat,lng,alt});
+      else{state.homeLat=lat;state.homeLng=lng;if(homeMarker)homeMarker.setLatLng([lat,lng]);}
+    },
+    err=>addAlert('Follow Me: '+err.message,'warn'),
+    {enableHighAccuracy:true,maximumAge:1000}
+  );
+}
+function emergencyStop(){state.armed=false;state.missionActive=false;state.vx=0;state.vy=0;state.vz=0;state.thrust=0;if(!state.simMode)sendCmd({cmd:'ESTOP'});addAlert('⛔ Emergency stop!','danger');syncArm(false);}
+function syncModeButtons(mode){
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+}
+function setMode(el,mode){
+  state.mode=mode;syncModeButtons(mode);
+  document.getElementById('mode-pill').textContent=mode;
+  if(!state.simMode)sendCmd({cmd:'SET_MODE',mode});
+  sysLog('Mode: '+mode);
+  if(mode==='ACRO')addAlert('ACRO — rate mode, no self-levelling','warn');
+}
+function toggleDetection(){
+  detectionEnabled=!detectionEnabled;
+  // Sync both toolbar button and AI-card button
+  ['det-btn','det-btn2'].forEach(id=>{
+    const b=document.getElementById(id);if(!b)return;
+    b.classList.toggle('on',detectionEnabled);
+    b.textContent=detectionEnabled?'🎯 AI Detect':'🎯 AI OFF';
+  });
+  if(detectionEnabled&&!modelReady){
+    sysLog('Loading COCO-SSD model…','ok');
+    cocoSsd.load({base:'lite_mobilenet_v2'}).then(m=>{cocoModel=m;modelReady=true;sysLog('AI model ready','ok');}).catch(e=>sysLog('Model load failed: '+e,'warn'));
+  }
+  if(!detectionEnabled)detCtx.clearRect(0,0,camW,camH);
+}
+function toggleRecord(){
+  state.recording=!state.recording;
+  const btn=document.getElementById('rec-btn'),pill=document.getElementById('rec-pill');
+  btn.className=state.recording?'cbtn rec':'cbtn';btn.textContent=state.recording?'⏹ Stop':'⏺ Rec';
+  document.getElementById('cam-rec').textContent=state.recording?'● REC':'● REC OFF';
+  pill.style.display=state.recording?'flex':'none';
+}
+function toggleNight(){nightMode=!nightMode;}
+function zoomIn(){state.zoom=Math.min(8,state.zoom+.5);}
+function zoomOut(){state.zoom=Math.max(1,state.zoom-.5);}
+function adjustRTL(d){state.rtlBat=Math.max(10,Math.min(50,state.rtlBat+d));document.getElementById('rtl-bat').textContent=state.rtlBat+'%';}
+function adjustScanAlt(d){state.scanAlt=Math.max(10,Math.min(120,state.scanAlt+d));document.getElementById('scan-alt').textContent=state.scanAlt+'m';}
+function toggleTarget(el){const t=el.dataset.target;el.classList.toggle('on');state.targets.has(t)?state.targets.delete(t):state.targets.add(t);}
+
+// ══════════════════════════════════════════════════════
+//  PANELS & TABS
+// ══════════════════════════════════════════════════════
+function togglePanel(side){
+  const el=document.getElementById('panel-'+side),btn=document.getElementById('btn-'+side);
+  const hidden=el.style.display==='none';
+  el.style.display=hidden?'':'none';
+  btn.classList.toggle('on',hidden);
+  setTimeout(()=>map&&map.invalidateSize(),250);
+}
+async function switchCameraTab(tab,el){
+  document.querySelectorAll('.ctab').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  _camTab=tab;
+  const modeEl=document.getElementById('cam-mode');
+  const urlInput=document.getElementById('drone-cam-url');
+  const trackLock=document.getElementById('track-lock');
+
+  if(tab==='video'){
+    // Live webcam — plain AI detection, no tracking overlay
+    urlInput.style.display='none';
+    trackLock.style.display='none';
+    _trackTarget=null;
+    if(!usingWebcam)await switchToWebcam();
+    if(modeEl&&usingWebcam)modeEl.textContent='WEBCAM';
+    // Enable detection automatically when switching to VIDEO
+    if(!detectionEnabled)toggleDetection();
+
+  } else if(tab==='payload'){
+    // Drone cam MJPEG or fallback to webcam
+    urlInput.style.display='inline-block';
+    trackLock.style.display='none';
+    _trackTarget=null;
+    const url=urlInput.value.trim();
+    if(url){setDroneCam(url);}
+    else{if(!usingWebcam)await switchToWebcam();if(modeEl&&usingWebcam)modeEl.textContent='PAYLOAD';}
+    if(!detectionEnabled)toggleDetection();
+
+  } else if(tab==='tracking'){
+    // Tracking mode — webcam + locked-target overlay
+    urlInput.style.display='none';
+    if(!usingWebcam)await switchToWebcam();
+    if(modeEl&&usingWebcam)modeEl.textContent='TRACKING';
+    if(!detectionEnabled)toggleDetection();
+    sysLog('Tracking mode active — AI will lock onto highest-confidence target','ok');
+  }
+}
+function switchCenterTab(tab){
+  // Convenience: show log tab
+  switchMapTab(document.querySelector('[onclick*="log"]'),'log');
+}
+function switchMapTab(el,tab){
+  document.querySelectorAll('.map-content').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.mtab').forEach(t=>t.classList.remove('active'));
+  const pane=document.getElementById('mc-'+tab);
+  if(pane){
+    pane.style.display='flex';pane.style.flexDirection='column';
+  }
+  if(el)el.classList.add('active');
+  if(tab==='map')setTimeout(()=>map&&map.invalidateSize(),50);
+}
+
+// ══════════════════════════════════════════════════════
+//  JOYSTICK
+// ══════════════════════════════════════════════════════
+let activeJoy=null,joyRect=null;
+function startJoy(e,side){e.preventDefault();activeJoy=side;joyRect=document.getElementById('joy-'+side).getBoundingClientRect();}
+function updateJoy(e){
+  if(!activeJoy)return;
+  const it=e.touches;const cx=it?it[0].clientX:e.clientX,cy=it?it[0].clientY:e.clientY;
+  const knob=document.getElementById('knob-'+activeJoy);
+  const rect=joyRect||document.getElementById('joy-'+activeJoy).getBoundingClientRect();
+  const R=rect.width/2,mx=rect.left+R,my=rect.top+R;
+  let dx=cx-mx,dy=cy-my;const dist=Math.sqrt(dx**2+dy**2);
+  if(dist>R-14){dx=dx/dist*(R-14);dy=dy/dist*(R-14);}
+  knob.style.left=(R+dx)+'px';knob.style.top=(R+dy)+'px';knob.style.transform='translate(-50%,-50%)';
+  // Real-TX stick shaping: small deadzone + expo curve — fine control near
+  // center, full authority at the edges, axes mix freely like a real radio
+  const DZ=.12,EXPO=.7;
+  const shape=v=>{
+    const a=Math.abs(v);if(a<DZ)return 0;
+    const n=Math.min(1,(a-DZ)/(1-DZ));
+    return Math.sign(v)*((1-EXPO)*n+EXPO*n*n*n);
+  };
+  let nx=shape(dx/(R-14)),ny=shape(dy/(R-14));
+  if(activeJoy==='left'){state.joy.throttle=-ny;state.joy.yaw=nx;}else{state.joy.pitch=-ny;state.joy.roll=nx;}
+  document.getElementById('joy-vals').textContent='T:'+Math.round(state.joy.throttle*100)+' R:'+Math.round(state.joy.roll*100);
+  if(!state.simMode&&ws&&ws.readyState===WebSocket.OPEN&&state.armed&&state.mode==='GUIDED'){
+    const MAX_V=5;
+    sendCmd({cmd:'VELOCITY',vx:-state.joy.pitch*MAX_V,vy:state.joy.roll*MAX_V,vz:-state.joy.throttle*MAX_V});
+  }
+}
+function stopJoy(){
+  if(!activeJoy)return;
+  const k=document.getElementById('knob-'+activeJoy);
+  k.style.left='50%';k.style.top='50%';k.style.transform='translate(-50%,-50%)';
+  if(activeJoy==='left'){
+    // ACRO uses a real-TX style throttle: it STAYS where you put it instead of
+    // springing back to centre (a centred spring would mean 50% throttle = climb)
+    if(state.mode==='ACRO'){
+      state.joy.yaw=0;
+      k.style.left='50%';k.style.transform='translate(-50%,-50%)';
+      activeJoy=null;return;
+    }
+    state.joy.throttle=0;state.joy.yaw=0;
+    if(state.mode==='STABILIZE'&&state.armed&&state.alt>0.5){
+      state.mode='LOITER';PHYSICS._loiterAlt=state.alt;
+      document.getElementById('mode-pill').textContent='LOITER';
+      syncModeButtons('LOITER');
+      addAlert('Auto-switched STAB → LOITER','ok');
+    }
+  }else{state.joy.pitch=0;state.joy.roll=0;}
+  activeJoy=null;
+  // Live mode: push the (now partially or fully zeroed) sticks to the drone,
+  // otherwise ArduPilot keeps flying the last velocity setpoint for ~3s
+  if(!state.simMode&&ws&&ws.readyState===WebSocket.OPEN&&state.armed&&state.mode==='GUIDED'){
+    const MAX_V=5;
+    sendCmd({cmd:'VELOCITY',vx:-state.joy.pitch*MAX_V,vy:state.joy.roll*MAX_V,vz:-state.joy.throttle*MAX_V});
+  }
+}
+document.addEventListener('mousemove',updateJoy);document.addEventListener('mouseup',stopJoy);
+document.addEventListener('touchmove',updateJoy,{passive:false});document.addEventListener('touchend',stopJoy);
+
+// ══════════════════════════════════════════════════════
+//  GAMEPAD / RC TRANSMITTER  (real TX in USB joystick mode, or any controller)
+// ══════════════════════════════════════════════════════
+const PAD={
+  connected:false,name:'',mapping:'mode2',invertThr:false,
+  live:{throttle:0,yaw:0,pitch:0,roll:0},
+  // Standard gamepad axes: 0=left X, 1=left Y, 2=right X, 3=right Y (up = −1)
+  MAPS:{
+    mode1:{pit:[1,-1],yaw:[0, 1],thr:[3,-1],rol:[2, 1]},
+    mode2:{thr:[1,-1],yaw:[0, 1],pit:[3,-1],rol:[2, 1]},
+    mode3:{thr:[1,-1],rol:[0, 1],pit:[3,-1],yaw:[2, 1]},
+    mode4:{pit:[1,-1],rol:[0, 1],thr:[3,-1],yaw:[2, 1]}
+  },
+  poll(){
+    const pads=navigator.getGamepads?navigator.getGamepads():[];
+    let gp=null;
+    for(const p of pads){if(p&&p.connected&&p.axes&&p.axes.length>=4){gp=p;break;}}
+    if(!gp){if(this.connected){this.connected=false;this.name='';updatePadUI();sysLog('Radio disconnected','warn');}return false;}
+    if(!this.connected||this.name!==gp.id){
+      this.connected=true;this.name=gp.id;updatePadUI();
+      sysLog('Radio: '+gp.id,'ok');addAlert('Radio connected','ok');
+    }
+    const m=this.MAPS[this.mapping]||this.MAPS.mode2;
+    const dz=v=>Math.abs(v)<.06?0:v;                    // TX centre slop only
+    const rd=k=>{const[i,s]=m[k];return dz((gp.axes[i]||0)*s);};
+    let thr=rd('thr');if(this.invertThr)thr=-thr;
+    this.live={throttle:thr,yaw:rd('yaw'),pitch:rd('pit'),roll:rd('rol')};
+    return true;
+  }
+};
+window.addEventListener('gamepadconnected',()=>PAD.poll());
+window.addEventListener('gamepaddisconnected',()=>{PAD.connected=false;updatePadUI();});
+
+// ── Flight Assist UI ─────────────────────────────────────────────────────────
+function toggleAssist(key,el){
+  SAFETY[key]=!SAFETY[key];
+  el.classList.toggle('on',SAFETY[key]);
+  el.style.color=SAFETY[key]?'var(--blue)':'var(--muted)';
+  el.style.borderColor=SAFETY[key]?'var(--blue)':'var(--brd)';
+  if(key==='windOn'&&!SAFETY[key])SAFETY.hold=null;
+  addAlert((key==='crashOn'?'Anti-Crash':key==='avoidOn'?'Obstacle Avoid':'Wind Hold')+' '+(SAFETY[key]?'ON':'OFF'),SAFETY[key]?'ok':'warn');
+}
+const ASSIST_LBL={HOLD:'🌬',AVOID:'🧱',GND:'⬇',CEIL:'⬆',SAVE:'🛡'};
+function updateAssistUI(){
+  const a=document.getElementById('assist-acts');if(!a)return;
+  const acts=SAFETY.acts||[];
+  a.textContent=acts.length?acts.map(x=>ASSIST_LBL[x]||x).join(' '):'—';
+  a.style.color=acts.includes('SAVE')||acts.includes('AVOID')?'var(--red)':'var(--muted)';
+  const w=SAFETY.windEst();
+  document.getElementById('as-wind-val').textContent=w.speed.toFixed(1)+' m/s '+d2c(w.dir);
+  const o=SAFETY.nearest;
+  const oe=document.getElementById('as-obst');
+  if(o){
+    const danger=o.dist<SAFETY.CLEAR_H&&state.alt<o.height+SAFETY.CLEAR_V;
+    oe.textContent=o.dist.toFixed(0)+'m '+d2c(o.bearing)+' h'+Math.round(o.height);
+    oe.style.color=danger?'var(--red)':o.dist<40?'var(--yellow)':'var(--text)';
+  }else{oe.textContent='none';oe.style.color='var(--text)';}
+  const z=landingZoneClear(),ze=document.getElementById('as-zone');
+  ze.textContent=z.clear?'clear':z.blockers.join(', ');
+  ze.style.color=z.clear?'var(--green)':'var(--red)';
+}
+
+function updatePadUI(){
+  const s=document.getElementById('pad-status');if(!s)return;
+  s.textContent=PAD.connected?('🎮 '+PAD.name.slice(0,32)):'🎮 No gamepad — using virtual sticks';
+  s.style.color=PAD.connected?'var(--green)':'var(--muted)';
+  const r=document.getElementById('pad-rate');if(r)r.textContent=RATES.max()+'°/s';
+}
+function buildPadBars(){
+  const c=document.getElementById('pad-bars');if(!c||c.dataset.built)return;
+  c.dataset.built='1';
+  ['Thr','Yaw','Pit','Rol'].forEach(k=>{
+    const l=document.createElement('span');l.textContent=k;l.style.color='var(--muted)';
+    const b=document.createElement('div');b.className='pad-bar';b.dataset.k=k;
+    b.innerHTML='<i></i>';
+    c.appendChild(l);c.appendChild(b);
+  });
+}
+function updatePadBars(){
+  const c=document.getElementById('pad-bars');if(!c||!c.dataset.built)return;
+  const v={Thr:state.joy.throttle,Yaw:state.joy.yaw,Pit:state.joy.pitch,Rol:state.joy.roll};
+  c.querySelectorAll('.pad-bar').forEach(b=>{
+    const x=Math.max(-1,Math.min(1,v[b.dataset.k]||0)),i=b.firstElementChild;
+    if(x>=0){i.style.left='50%';i.style.width=(x*50)+'%';}
+    else{i.style.left=(50+x*50)+'%';i.style.width=(-x*50)+'%';}
+    i.style.background=Math.abs(x)>.85?'var(--yellow)':'var(--blue)';
+  });
+}
+// 20 Hz radio poll — drives the sim, and streams velocity in live GUIDED mode
+setInterval(()=>{
+  if(!PAD.poll())return;
+  if(activeJoy)return;                       // dragging a virtual stick wins
+  state.joy.throttle=PAD.live.throttle;state.joy.yaw=PAD.live.yaw;
+  state.joy.pitch=PAD.live.pitch;state.joy.roll=PAD.live.roll;
+  if(!state.simMode&&ws&&ws.readyState===WebSocket.OPEN&&state.armed&&state.mode==='GUIDED'){
+    const MAX_V=5;
+    sendCmd({cmd:'VELOCITY',vx:-state.joy.pitch*MAX_V,vy:state.joy.roll*MAX_V,vz:-state.joy.throttle*MAX_V});
+  }
+},50);
+
+// ══════════════════════════════════════════════════════
+//  KEYBOARD
+// ══════════════════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key==='ArrowUp')state.joy.pitch=-.4;if(e.key==='ArrowDown')state.joy.pitch=.4;
+  if(e.key==='ArrowLeft')state.joy.yaw=-.5;if(e.key==='ArrowRight')state.joy.yaw=.5;
+  if(e.key==='w'||e.key==='W')state.joy.throttle=.4;if(e.key==='s'||e.key==='S')state.joy.throttle=-.4;
+  if(e.key===' '){e.preventDefault();land();}if(e.key==='r'||e.key==='R')rtl();
+  if(e.key==='x'||e.key==='X')SAFETY.rescue();
+});
+document.addEventListener('keyup',e=>{
+  if(['ArrowUp','ArrowDown'].includes(e.key))state.joy.pitch=0;
+  if(['ArrowLeft','ArrowRight'].includes(e.key))state.joy.yaw=0;
+  if('wWsS'.includes(e.key))state.joy.throttle=0;
+});
+
+// ══════════════════════════════════════════════════════
+//  ALERTS & LOG
+// ══════════════════════════════════════════════════════
+let logCount=0,alertCount=0;
+const detIcons={person:'👤',car:'🚗',truck:'🚛',dog:'🐕',bird:'🐦',bicycle:'🚲'};
+
+function addDetectionAlert(label,conf){
+  const el=document.getElementById('alert-list'),n=new Date();
+  const ts=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
+  const d=document.createElement('div');d.className='al-item';
+  d.innerHTML=`
+    <div class="al-icon">${detIcons[label]||'📦'}</div>
+    <div class="al-body">
+      <div class="al-label">${label.charAt(0).toUpperCase()+label.slice(1)} detected</div>
+      <div class="al-coords">${state.lat.toFixed(5)}, ${state.lng.toFixed(5)}</div>
+    </div>
+    <span class="al-conf ${label}">${(conf*100).toFixed(0)}%</span>
+    <span class="al-time">${ts}</span>
+  `;
+  el.prepend(d);while(el.children.length>20)el.removeChild(el.lastChild);
+  document.getElementById('alert-count').textContent=++alertCount;
+  document.getElementById('sb-msgs').textContent=alertCount;
+}
+function addAlert(msg,type='info'){
+  const el=document.getElementById('alert-list'),n=new Date();
+  const ts=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  const colors={info:'var(--muted)',warn:'var(--yellow)',danger:'var(--red)',ok:'var(--green)'};
+  const d=document.createElement('div');
+  d.style.cssText='padding:5px 8px;margin-bottom:4px;border-radius:4px;font-size:11px;background:var(--sur2);border:1px solid var(--brd);';
+  d.style.color=colors[type]||'var(--muted)';
+  d.textContent='['+ts+'] '+msg;
+  el.prepend(d);while(el.children.length>30)el.removeChild(el.lastChild);
+  document.getElementById('alert-count').textContent=++alertCount;
+}
+function sysLog(msg,type='info'){
+  const colors={info:'var(--muted)',warn:'var(--yellow)',danger:'var(--red)',ok:'var(--green)'};
+  const el=document.getElementById('sys-log'),n=new Date();
+  const ts=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
+  const d=document.createElement('div');d.className='lg-item';d.style.color=colors[type];
+  d.textContent='['+ts+'] '+msg;el.prepend(d);
+  while(el.children.length>60)el.removeChild(el.lastChild);
+  const lc=document.getElementById('log-count');if(lc)lc.textContent=++logCount;
+}
+
+// ══════════════════════════════════════════════════════
+//  BATTERY ALARM (Web Audio)
+// ══════════════════════════════════════════════════════
+let _audioCtx=null;let _lastBatAlarm=0;
+function playBatteryAlarm(){
+  try{
+    if(!_audioCtx)_audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=_audioCtx.createOscillator();
+    const gain=_audioCtx.createGain();
+    osc.connect(gain);gain.connect(_audioCtx.destination);
+    osc.type='square';
+    osc.frequency.setValueAtTime(880,_audioCtx.currentTime);
+    osc.frequency.linearRampToValueAtTime(440,_audioCtx.currentTime+0.3);
+    gain.gain.setValueAtTime(0.25,_audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0,_audioCtx.currentTime+0.3);
+    osc.start();osc.stop(_audioCtx.currentTime+0.3);
+  }catch(e){}
+}
+
+// ══════════════════════════════════════════════════════
+//  GEOFENCE
+// ══════════════════════════════════════════════════════
+function setGeofence(){
+  const r=parseFloat(document.getElementById('fence-r').value)||500;
+  if(fenceCircle)map.removeLayer(fenceCircle);
+  fenceCircle=L.circle([state.homeLat,state.homeLng],{radius:r,color:'#eab308',weight:1.5,dashArray:'6 4',fillOpacity:0.05}).addTo(map);
+  if(!state.simMode)sendCmd({cmd:'SET_GEOFENCE',lat:state.homeLat,lng:state.homeLng,radius:r});
+  addAlert('Geofence set: '+r+'m radius','ok');
+}
+function clearGeofence(){
+  if(fenceCircle){map.removeLayer(fenceCircle);fenceCircle=null;}
+  if(!state.simMode)sendCmd({cmd:'CLEAR_GEOFENCE'});
+  addAlert('Geofence cleared','ok');
+}
+
+// Clock
+setInterval(()=>{const n=new Date();document.getElementById('clock').textContent=String(n.getUTCHours()).padStart(2,'0')+':'+String(n.getUTCMinutes()).padStart(2,'0')+':'+String(n.getUTCSeconds()).padStart(2,'0')+' UTC';},1000);
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+function init(){
+  initMap();initCamera();init3DCam();loadModel();simulateConnect();
+  buildPadBars();updatePadUI();updateCamLayers();
+  sysLog('APEX GCS ready','ok');
+  sysLog('W/S=throttle  Arrows=pitch/yaw  Space=land  R=RTL  X=rescue');
+  addAlert('System ready — click Webcam if the live feed is not on','ok');
+  // User-gesture-safe: try immediately (permission already granted),
+  // and again shortly after in case MapLibre just mounted its canvas.
+  activateWebcam();
+  setTimeout(()=>{if(!usingWebcam)activateWebcam();},600);
+  // Demo waypoints — offsets from home so they follow the spawn point
+  setTimeout(()=>{
+    [[.0012,.0012,30],[.0027,.0025,40],[.0037,.0010,35]].forEach(([dl,dg,alt])=>{
+      document.getElementById('wp-lat').value=(state.homeLat+dl).toFixed(6);
+      document.getElementById('wp-lng').value=(state.homeLng+dg).toFixed(6);
+      document.getElementById('wp-alt').value=alt;addWaypoint();
+    });
+  },800);
+  window.addEventListener('resize',()=>{
+    const wrap=document.getElementById('cam-pane');
+    if(!wrap)return;camW=wrap.clientWidth;camH=wrap.clientHeight;
+    const dc=document.getElementById('det-canvas');
+    if(dc){dc.width=camW;dc.height=camH;}
+    const fc=document.getElementById('fpv-canvas');
+    if(fc){fc.width=camW;fc.height=camH;}
+    if(map)map.invalidateSize();
+    if(cam3d)cam3d.resize();
+  });
+}
+window.addEventListener('load',init);
+</script>
+</body>
+</html>

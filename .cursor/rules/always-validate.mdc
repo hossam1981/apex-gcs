@@ -1,0 +1,46 @@
+---
+description: After any code change, prove the drone app still works; never delete flagged functions without asking
+alwaysApply: true
+---
+
+# Always validate — do not ship a broken APEX GCS
+
+**What matters:** Agent work is not done until `python3 scripts/validate.py` prints `VALIDATE PASS`.
+
+## Do this after every code slice
+
+1. Edit the files for this slice only.
+2. Run `python3 scripts/validate.py` from the repo root.
+3. If it prints `VALIDATE FAIL`, fix those items, then run it again.
+4. Only then say the slice is done.
+
+## Why
+
+Hooks run `python3 scripts/validate.py` after **each** Agent/Tab edit of `bridge/`, `files/`, `scripts/`, or `.cursor/`. A stop hook still re-prompts if anything is still red.
+
+## What the validator covers (fast, no SITL)
+
+- Python / shell syntax, SDF XML, cockpit IDs, MAVLink cmd contract
+- No placeholder/stub functions (`pass`, `TODO`, `NotImplementedError`, empty body)
+- No orphan functions (defined, never called)
+- No broken sequence (HTML `onclick` / `onchange` must call a real function)
+
+## Orphan / placeholder — ASK first (required)
+
+If the check flags a function as `[orphan]` or `[placeholder]`:
+
+1. Search where it *should* wire (buttons, CSS, `sendCmd`, bridge handlers, docs).
+2. Tell the user: what it does, why nothing calls it, what it could connect to.
+3. **Ask:** wire it, keep it, or delete it?
+4. **Do not delete** until the user answers. Do not delete just to make validate green.
+
+Broken sequence (`onclick` → missing function) may be wired without asking. That is a missing call, not extra code.
+
+## Do not
+
+- Claim success if validate failed.
+- Start Gazebo / SITL / a real drone just to “check syntax.”
+- Delete or skip `scripts/validate.py` to make the hook go quiet.
+- Change ARM / TAKEOFF / RTL / ESTOP / START_MISSION without keeping HTML and `bridge.py` in sync.
+- Leave new stubs you just wrote. Finish them or ask before leaving them.
+- Add a function that nothing calls, or an `onclick` that points at a missing function.

@@ -1,0 +1,19 @@
+.DS_Store
+**/.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+*.log
+
+# Local IDE / agent caches
+.cursor/hooks/__pycache__/
+files/.claude/
+
+# Heavy local simulator installs (setup scripts download these)
+bridge/ardupilot/
+bridge/ardupilot_gazebo/
+*.bin
